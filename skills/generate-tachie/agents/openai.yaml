@@ -1,0 +1,7 @@
+interface:
+  display_name: "Generate Tachie (立繪)"
+  short_description: "ADV/VN character standing illustrations with expression variations."
+  default_prompt: "Use $generate-tachie to create ADV/Visual Novel dialogue-scene standing portraits; start by asking the user about the character's visual direction (role, style preference, key visual traits, mood) to build a consistent Prompt Anchor — infer what you can, only ask what's genuinely missing; create a design doc with the Prompt Anchor for consistency; default art_style to anime_illustration and framing to waist-up; write image prompts manually including the full Prompt Anchor verbatim, concrete expression descriptions, and 'transparent background, single character, no text'; for expression variants make the base neutral image visible in context first and reference it to preserve character design; if the user is unsatisfied at any step discuss what's off and update the prompt or design doc before regenerating; save every prompt as .prompt.txt alongside the image; do not generate scene backgrounds, animated sprite sheets, or engine metadata."
+
+policy:
+  allow_implicit_invocation: true

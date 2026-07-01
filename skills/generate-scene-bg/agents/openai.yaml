@@ -1,0 +1,7 @@
+interface:
+  display_name: "Generate Scene BG"
+  short_description: "ADV/VN scene background illustrations with optional time-of-day variants."
+  default_prompt: "Use $generate-scene-bg to create an ADV/Visual Novel style scene background illustration; infer art_style from the request defaulting to anime_illustration; default aspect_ratio to 16:9 (1920x1080); write the image prompt manually describing composition, perspective, lighting, and atmosphere; include 'no characters, no text, no UI elements' in every prompt; save prompt as .prompt.txt alongside the image; for time/weather variants of an existing scene, make the original image visible in context first and explicitly reference it in the variant prompt to preserve room layout and composition; do not generate collision, props, tilemaps, engine metadata, or character sprites."
+
+policy:
+  allow_implicit_invocation: true

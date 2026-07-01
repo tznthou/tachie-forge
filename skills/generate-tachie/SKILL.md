@@ -1,0 +1,165 @@
+---
+name: generate-tachie
+description: "Generate ADV / Visual Novel character standing illustrations (tachie / 立繪). Use when creating dialogue-scene standing portraits with expression variations (neutral, smile, angry, sad, surprised, confused). Supports consistent character design via design doc + visual reference handoff. NOT for scene backgrounds (use generate-scene-bg)."
+---
+
+# Generate Tachie (立繪)
+
+Generate character standing illustrations for ADV / Visual Novel style games (Persona, Ace Attorney, etc.). Output is a set of waist-up transparent-background PNGs with expression variations for one character.
+
+## Parameters
+
+Infer from the user request. Only `character_name` is required.
+
+- `character_name`: identifier for the character (used in filenames and design doc)
+- `art_style`: `anime_illustration` | `semi_realistic` | `cel_shaded`
+- `expression`: `neutral` | `smile` | `angry` | `sad` | `surprised` | `confused` | custom
+- `framing`: `waist-up` (default) | `bust-up` | `full-body`
+
+When unspecified:
+- Default `art_style` to `anime_illustration`.
+- Default `framing` to `waist-up`.
+- Default `expression` to `neutral` for first generation.
+
+## Workflow
+
+**Rejection at any step**: if the user is unsatisfied with a result (design direction, base image, or variant), discuss what's off, update the relevant prompt or design doc, and regenerate. If the Prompt Anchor changes, update design.md and regenerate affected images.
+
+### Step 0 — Ask Character Style Direction
+
+Before any generation, ask the user about the character's visual direction:
+
+1. **Who is this character?** — role in the story, personality, age range
+2. **Visual style preference?** — anime_illustration / semi_realistic / cel_shaded, or defer to project default
+3. **Key visual traits** — hair color/style, eye color, outfit, distinguishing features
+4. **Mood/aura** — cool, warm, energetic, mysterious, etc.
+
+This step builds the Prompt Anchor that keeps all expression variants visually consistent. Without it, the anchor will be vague and variants will drift in appearance. Infer what you can from the user's request — only ask about what's genuinely missing.
+
+When shaping visual traits, steer away from design elements that inherently form closed loops against the body (e.g., twin tails or hair that curls back and touches the torso, hoop earrings, closed necklace chains resting flush on the outfit, tightly crossed arms). These trap background pixels inside a fully enclosed region that `rembg` cannot reach regardless of prompt wording — this is a design-time prevention, not just a prompt-time instruction. Prefer hairstyles and poses with natural gaps to the outside of the silhouette.
+
+### Step 1 — Create or Load Design Doc
+
+Check if `assets/tachie/<character_name>/design.md` exists.
+
+**If it does not exist** (new character):
+
+From the Step 0 answers, create `assets/tachie/<character_name>/design.md` with:
+
+```markdown
+# <Character Name> — Design Doc
+
+## Identity
+- Role: ...
+- Personality: ...
+- Age range: ...
+
+## Visual Design
+- Art style: ...
+- Framing: ...
+- Hair: color, length, style
+- Eyes: color, shape
+- Outfit: description
+- Distinguishing features: ...
+- Mood/aura: ...
+
+## Prompt Anchor
+<A reusable prompt fragment describing the character's appearance.
+This exact text is pasted into every generation prompt for consistency.>
+```
+
+The **Prompt Anchor** is the key consistency mechanism — a fixed text block describing the character's physical appearance that gets included verbatim in every image prompt.
+
+**If it already exists** (returning character): load the design doc and use the Prompt Anchor.
+
+### Step 2 — Generate Base Tachie (neutral expression)
+
+1. Write the image prompt manually. The prompt must include:
+   - The full Prompt Anchor from the design doc (verbatim)
+   - Framing: "waist-up portrait" / "bust-up" / "full-body standing"
+   - Expression: "neutral expression, calm face"
+   - "Single character, clean lines, no text, no UI"
+   - "Hair strands and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
+   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette, no light-colored highlight strokes floating outside the hair outline — keep the hair silhouette clean and contained"
+   - Art style cues matching the chosen `art_style`
+   - Request transparent background in the prompt (gpt-image-2 renders a checkered-pattern fake transparency)
+2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body.
+3. Post-process: run `rembg i -m isnet-anime <raw>.png <output_rembg>.png` then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with `isnet-anime` model.
+4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
+5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
+6. Show the result to the user for approval before generating variants.
+
+### Step 3 — Generate Expression Variants
+
+For each requested expression (or all 6 MVP expressions: smile, angry, sad, surprised, confused):
+
+1. Make the base (neutral) image visible in conversation context (via `view_image` or any available image reading method).
+2. Write the variant prompt including:
+   - The full Prompt Anchor from the design doc (verbatim)
+   - Same framing as the base
+   - "Use the visible image above as the visual reference — preserve the exact character design, outfit, hair, pose, and proportions. Change only the facial expression."
+   - The target expression: describe it concretely (e.g., "angry expression: furrowed brows, clenched jaw, sharp eyes" not just "angry")
+   - "Single character, no text, hair and clothing edges should not form a closed silhouette"
+3. Generate, then post-process with `rembg i -m isnet-anime` + alpha clamp.
+4. Save as `<character_name>_<expression>.png` with `.prompt.txt`.
+
+This is best-effort consistency — image generation cannot guarantee identical appearance across variants. The Prompt Anchor + visual reference handoff improves consistency but is not pixel-perfect.
+
+## Expression Descriptions
+
+Use these concrete descriptions in prompts (not just the emotion word):
+
+| Expression | Prompt description |
+|-----------|-------------------|
+| `neutral` | neutral expression, relaxed face, calm eyes, slight natural resting expression |
+| `smile` | warm smile, soft eyes, gentle happy expression, relaxed brows |
+| `angry` | angry expression, furrowed brows, clenched jaw, intense sharp eyes |
+| `sad` | sad expression, downcast eyes, slightly lowered brows, melancholic look |
+| `surprised` | surprised expression, wide eyes, slightly open mouth, raised eyebrows |
+| `confused` | confused expression, one eyebrow raised, slight frown, puzzled look |
+
+## Art Style Cues
+
+| Style | Prompt cues |
+|-------|------------|
+| `anime_illustration` | anime-style character illustration, detailed anime art, clean linework, cel-shaded coloring |
+| `semi_realistic` | semi-realistic digital portrait, detailed rendering, soft lighting on face |
+| `cel_shaded` | cel-shaded character art, flat colors with clean outlines, stylized anime shading |
+
+## File Structure
+
+MVP uses one pose per character. Multi-pose support (e.g., `<character>_<pose>_<expression>.png`) is a deliberate v2 scope item — not an oversight.
+
+```
+assets/tachie/
+  akira/
+    design.md
+    akira_neutral.png
+    akira_neutral.prompt.txt
+    akira_smile.png
+    akira_smile.prompt.txt
+    akira_angry.png
+    akira_angry.prompt.txt
+    ...
+```
+
+## Validation
+
+- All images for one character share the same framing and approximate proportions
+- Transparent background (no solid color background baked in)
+- Prompt Anchor text appears verbatim in every prompt
+- Design doc exists before any generation
+- Prompt file saved alongside every generated image
+
+## Known Limitation — Hair Edge Highlight
+
+Even with the anti-flyaway-strand instruction, the image model may still render a thin light-colored rim-light stroke along the hair silhouette edge (a common anime rendering convention, baked into the artwork itself). This is not a background-removal artifact — `rembg` correctly keeps these pixels as foreground, so no alpha-clamp or erosion post-processing can remove it. It is invisible against light/white backdrops but becomes visible when the character is composited directly over a dark region of a scene background.
+
+Workaround: when compositing, avoid placing the character's hair silhouette directly over dark areas of the background (e.g., shift horizontal position, or pick a scene with a light-toned area behind the head). This is a compositing-time concern, not something to fix in the tachie generation step itself.
+
+## Boundaries
+
+- Scene backgrounds → `generate-scene-bg`
+- Dialogue UI, text boxes → separate skill (TBD)
+- Cross-skill art style consistency (tachie + BG looking cohesive) → project-level style guide (TBD)
+- This skill produces standing illustrations only — no engine metadata, no animation frames
