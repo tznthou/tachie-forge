@@ -40,7 +40,7 @@ State the plan briefly and confirm before generating.
    - Art style cues matching the chosen `art_style`
    - Lighting and atmosphere matching `time_variant` if set
    - "No characters, no text, no UI elements" — backgrounds must be empty of actors
-2. Call `image_gen` with the prompt.
+2. Call `image_gen` with the prompt. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh -o assets/bg/<scene-name>.png "<prompt>"` — this bridges to Codex CLI's `image_gen`.
 3. Save the prompt as `assets/bg/<scene-name>.prompt.txt`.
 4. Validate: correct dimensions/aspect ratio, no baked-in characters or text.
 

@@ -83,7 +83,7 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
    - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette, no light-colored highlight strokes floating outside the hair outline — keep the hair silhouette clean and contained"
    - Art style cues matching the chosen `art_style`
    - Request transparent background in the prompt (gpt-image-2 renders a checkered-pattern fake transparency)
-2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body.
+2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh --size <size> -o <output-path> "<prompt>"` — this bridges to Codex CLI's `image_gen`.
 3. Post-process: run `rembg i -m isnet-anime <raw>.png <output_rembg>.png` then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with `isnet-anime` model.
 4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
 5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
