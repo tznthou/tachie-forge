@@ -5,3 +5,9 @@ outputs/
 test-output/
 .venv/
 .claude/
+
+# autoresearch-loop scratch (experiment state, not project output)
+.autoresearch-*.md
+/backup/
+/iterations/
+final-comparison.md

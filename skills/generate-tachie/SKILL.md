@@ -80,7 +80,9 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
    - Expression: "neutral expression, calm face"
    - "Single character, clean lines, no text, no UI"
    - "Hair strands and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
-   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette, no light-colored highlight strokes floating outside the hair outline — keep the hair silhouette clean and contained"
+   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette"
+   - "If the hair rendering includes any glossy shine or highlight accents, they must be placed only near the crown/top of the head, well inside the silhouette and away from any edge — the outer silhouette edge and the tapered strand tips must remain a uniform flat dark tone with zero highlight, since any brightness at the very edge or tip directly touches the transparent background boundary"
+   - "The character silhouette should have a crisp, high-contrast, clean-cut edge against the background — avoid soft blending, gradient fading, or anti-aliased blur at the outline boundary"
    - Art style cues matching the chosen `art_style`
    - Request transparent background in the prompt (gpt-image-2 renders a checkered-pattern fake transparency)
 2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh --size <size> -o <output-path> "<prompt>"` — this bridges to Codex CLI's `image_gen`.
@@ -99,7 +101,10 @@ For each requested expression (or all 6 MVP expressions: smile, angry, sad, surp
    - Same framing as the base
    - "Use the visible image above as the visual reference — preserve the exact character design, outfit, hair, pose, and proportions. Change only the facial expression."
    - The target expression: describe it concretely (e.g., "angry expression: furrowed brows, clenched jaw, sharp eyes" not just "angry")
-   - "Single character, no text, hair and clothing edges should not form a closed silhouette"
+   - "Single character, no text, hair and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
+   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette"
+   - "If the hair rendering includes any glossy shine or highlight accents, they must be placed only near the crown/top of the head, well inside the silhouette and away from any edge — the outer silhouette edge and the tapered strand tips must remain a uniform flat dark tone with zero highlight, since any brightness at the very edge or tip directly touches the transparent background boundary"
+   - "The character silhouette should have a crisp, high-contrast, clean-cut edge against the background — avoid soft blending, gradient fading, or anti-aliased blur at the outline boundary"
 3. Generate, then post-process with `rembg i -m isnet-anime` + alpha clamp.
 4. Save as `<character_name>_<expression>.png` with `.prompt.txt`.
 
@@ -153,9 +158,11 @@ assets/tachie/
 
 ## Known Limitation — Hair Edge Highlight
 
-Even with the anti-flyaway-strand instruction, the image model may still render a thin light-colored rim-light stroke along the hair silhouette edge (a common anime rendering convention, baked into the artwork itself). This is not a background-removal artifact — `rembg` correctly keeps these pixels as foreground, so no alpha-clamp or erosion post-processing can remove it. It is invisible against light/white backdrops but becomes visible when the character is composited directly over a dark region of a scene background.
+The image model has a strong tendency to render a thin light-colored rim-light stroke along the hair silhouette edge, especially near strand tips (a common anime rendering convention, baked into the artwork itself). This is not a background-removal artifact — `rembg` correctly keeps these pixels as foreground, so no alpha-clamp or erosion post-processing can remove it.
 
-Workaround: when compositing, avoid placing the character's hair silhouette directly over dark areas of the background (e.g., shift horizontal position, or pick a scene with a light-toned area behind the head). This is a compositing-time concern, not something to fix in the tachie generation step itself.
+Directly instructing the model to avoid all hair highlights is unreliable and can backfire — naming specific rendering techniques (e.g. "rim lighting", "specular highlights") or pointing at specific parts (e.g. "tips") sometimes increases their occurrence instead of suppressing it, likely a diffusion model attention artifact. What works better, validated via autoresearch-loop iteration (2026-07-02): instructing the model to confine any highlight near the crown/top of the head, away from the silhouette edge and strand tips, redirects the highlight to a harmless location instead of fighting the model's rendering prior — this is the instruction now baked into both Step 2 and Step 3. This reduced edge-highlight severity from a median rubric score of 4 down to 1 across repeated trials on the Step 2 (text-to-image) path, though it does not fully eliminate the risk on every generation. Step 3 (image-to-image variant generation with visual reference) was not independently tested via autoresearch-loop — the same instruction was applied there for consistency, on the reasoning that the post-processing pipeline and the model's rendering prior are the same regardless of expression. A follow-up attempt to make the boundary even more precise (exact fractions like "upper quarter") backfired the same way as naming specific techniques — the vaguer-but-correctly-aimed instruction outperformed the more precise one.
+
+Workaround for residual cases: when compositing, avoid placing the character's hair silhouette directly over dark areas of the background (e.g., shift horizontal position, or pick a scene with a light-toned area behind the head). This remains a useful compositing-time safety net, not a replacement for the prompt-level mitigation above.
 
 ## Boundaries
 
