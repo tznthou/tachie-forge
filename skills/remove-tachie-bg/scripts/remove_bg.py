@@ -10,13 +10,19 @@ Deliberately NOT included (v2): background auto-detection, alpha-matting
 refinement, batch mode, complex-background handling.
 """
 import argparse
+import io
 import os
-import subprocess
 import sys
-import tempfile
 
 import numpy as np
 from PIL import Image
+
+# 函式庫 API 而非 rembg CLI: CLI 進入點無條件 import server/GUI 依賴(在 [cli] extra,
+# 拖 gradio/fastapi 全套), 函式庫核心只需 [cpu]; CLI 的 i 命令內部即是 remove(bytes, session)
+try:
+    from rembg import new_session, remove as rembg_remove
+except ImportError as e:
+    sys.exit(f"[error] rembg import failed ({e}). Is rembg[cpu] installed? See requirements.txt")
 
 
 def main():
@@ -37,44 +43,40 @@ def main():
         sys.exit(f"[error] input not found: {args.input}")
 
     # 1. load + downscale (立繪用不到 8K,超大圖 rembg 慢且不會更準)
-    img = Image.open(args.input).convert("RGB")
+    try:
+        img = Image.open(args.input).convert("RGB")
+    except OSError as e:  # UnidentifiedImageError(壞檔/非圖片)也是 OSError
+        sys.exit(f"[error] cannot read image ({e}). PNG/JPEG/WebP supported.")
     w, h = img.size
     scale = min(1.0, args.max_edge / max(w, h))
     if scale < 1.0:
         img = img.resize((int(w * scale), int(h * scale)))
         print(f"[downscale] {w}x{h} -> {img.size[0]}x{img.size[1]}")
 
-    with tempfile.TemporaryDirectory() as td:
-        src = os.path.join(td, "src.png")
-        cut = os.path.join(td, "cut.png")
-        img.save(src)
+    # 2. rembg (anime-tuned segmentation; 餵 PNG bytes — 輸出驗證基準建立在此路徑, 勿改餵 PIL 物件)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    cut_bytes = rembg_remove(buf.getvalue(), session=new_session("isnet-anime"))
+    rgba = Image.open(io.BytesIO(cut_bytes)).convert("RGBA")
+    arr = np.array(rgba)
+    a = arr[:, :, 3].astype(np.int32)
 
-        # 2. rembg (anime-tuned segmentation)
-        try:
-            subprocess.run(["rembg", "i", "-m", "isnet-anime", src, cut], check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            sys.exit(f"[error] rembg failed ({e}). Is rembg[cpu] installed? See requirements.txt")
+    # 3. alpha clamp (>=120 -> opaque, <=30 -> transparent; keep the feathered rim between)
+    a[a >= 120] = 255
+    a[a <= 30] = 0
+    arr[:, :, 3] = a.astype(np.uint8)
 
-        rgba = Image.open(cut).convert("RGBA")
-        arr = np.array(rgba)
-        a = arr[:, :, 3].astype(np.int32)
-
-        # 3. alpha clamp (>=120 -> opaque, <=30 -> transparent; keep the feathered rim between)
-        a[a >= 120] = 255
-        a[a <= 30] = 0
-        arr[:, :, 3] = a.astype(np.uint8)
-
-        # 4. green-spill decontamination (only for green screens)
-        greenish_count = 0
-        if args.bg_type == "green":
-            r = arr[:, :, 0].astype(int)
-            g = arr[:, :, 1].astype(int)
-            b = arr[:, :, 2].astype(int)
-            partial = (a > 30) & (a < 255)               # feathered edge band
-            greenish = partial & (g > r + 18) & (g > b + 18)
-            greenish_count = int(greenish.sum())
-            # 輕壓:偏綠像素的綠通道壓到 max(r,b),不做完整反解
-            arr[:, :, 1] = np.where(greenish, np.maximum(r, b), g).astype(np.uint8)
+    # 4. green-spill decontamination (only for green screens)
+    greenish_count = 0
+    if args.bg_type == "green":
+        r = arr[:, :, 0].astype(int)
+        g = arr[:, :, 1].astype(int)
+        b = arr[:, :, 2].astype(int)
+        partial = (a > 30) & (a < 255)               # feathered edge band
+        greenish = partial & (g > r + 18) & (g > b + 18)
+        greenish_count = int(greenish.sum())
+        # 輕壓:偏綠像素的綠通道壓到 max(r,b),不做完整反解
+        arr[:, :, 1] = np.where(greenish, np.maximum(r, b), g).astype(np.uint8)
 
     out = Image.fromarray(arr, "RGBA")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)

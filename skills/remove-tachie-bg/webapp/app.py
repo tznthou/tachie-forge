@@ -19,6 +19,10 @@ from flask import Flask, jsonify, request
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.normpath(os.path.join(HERE, "..", "scripts", "remove_bg.py"))
 
+# shell 繼承的 PYTHONPATH 會插在 sys.path 最前面蓋過 venv 套件; 清掉讓 subprocess
+# (remove_bg.py)確實用 venv 依賴(start.command 已清, 這裡保手動啟動的場景)
+os.environ.pop("PYTHONPATH", None)
+
 app = Flask(__name__, static_folder="static")
 
 
