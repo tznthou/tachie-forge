@@ -11,7 +11,7 @@
 
 ## 核心概念
 
-Tachie Forge 是兩個 Claude Code / Codex skill：`generate-scene-bg` 生成場景背景，`generate-tachie` 生成角色立繪（表情差分、透明背景）。用自然語言描述想要的場景或角色，agent 規劃 prompt、呼叫圖片生成、跑後製，把素材存進 `assets/`——不用開 Photoshop 手動去背，也不用碰 ComfyUI 的 node graph。
+Tachie Forge 是三個 Claude Code / Codex skill：`generate-scene-bg` 生成場景背景，`generate-tachie` 生成角色立繪（表情差分、透明背景），`remove-tachie-bg` 給現成的立繪去背（拖進本地網頁，去背後深底／白底雙檢查再下載）。用自然語言描述想要的場景或角色，agent 規劃 prompt、呼叫圖片生成、跑後製，把素材存進 `assets/`——不用開 Photoshop 手動去背，也不用碰 ComfyUI 的 node graph。
 
 角色一致性靠 Prompt Anchor：把角色的外觀描述寫成一段固定文字，每次生成表情差分都原文帶入，加上把前一張圖丟進對話當視覺參照。這是 best-effort，不是 LoRA 訓練出來的像素級一致，效果有極限。
 
@@ -23,21 +23,24 @@ Tachie Forge 是兩個 Claude Code / Codex skill：`generate-scene-bg` 生成場
 |------|------|
 | **generate-scene-bg** | 生成 ADV/VN 場景背景，支援時段/天氣變體（白天、黃昏、雨天等），拿既有背景當視覺參照維持構圖一致 |
 | **generate-tachie** | 生成角色立繪，六種表情差分（neutral / smile / angry / sad / surprised / confused），Design Doc + Prompt Anchor 機制維持角色一致性 |
+| **remove-tachie-bg** | 現成立繪去背：本地 Web UI 拖圖進來 → 透明 PNG → 深底／白底雙檢查 → 下載；綠幕圖會多做去綠處理，也有 CLI 版 |
 | **對話 UI** | 規劃中，尚未開始 |
 
 ## 系統架構
 
 ```mermaid
 flowchart LR
-    User["自然語言請求"] --> Route{"generate-scene-bg<br/>或 generate-tachie"}
+    User["自然語言請求"] --> Route{"三種需求"}
     Route -->|場景背景| PromptBG["組 Prompt<br/>場景描述 + 風格"]
     Route -->|角色立繪| PromptChar["組 Prompt<br/>Prompt Anchor + 表情"]
+    Route -->|現成立繪去背| WebUI["remove-tachie-bg<br/>本地 Web UI / CLI"]
     PromptBG --> Codex["Codex CLI<br/>image_gen (gpt-image-2)"]
     PromptChar --> Codex
     Codex --> RawBG["assets/bg/*.png"]
     Codex --> RawChar["raw PNG"]
     RawChar --> Rembg["rembg isnet-anime<br/>+ alpha clamp"]
-    Rembg --> OutChar["assets/tachie/&lt;character&gt;/*.png"]
+    WebUI --> Rembg
+    Rembg --> OutChar["透明 PNG<br/>assets/tachie/ 或瀏覽器下載"]
 ```
 
 ## 技術棧
@@ -46,8 +49,9 @@ flowchart LR
 |------|------|------|
 | Codex CLI | 呼叫 `image_gen` 生成圖片 | 需要 `OPENAI_API_KEY`，模型固定 gpt-image-2 |
 | gpt-image-2 | 實際生圖模型 | 不支援原生透明背景，用棋盤格假透明 workaround |
-| rembg (isnet-anime) | 立繪去背 | Python 套件，`pip install rembg[cpu]` |
-| Python | 跑去背 + alpha clamp 後製 | 3.13 |
+| rembg (isnet-anime) | 立繪去背 | Python 套件，隨 `requirements.txt` 安裝 |
+| Flask | remove-tachie-bg 的本地 Web UI | 雙擊 `start.command` 啟動，圖片不離開本機 |
+| Python | 跑去背 + alpha clamp 後製 | 3.13，虛擬環境用 uv 管理 |
 | Bash | `call-codex-imagegen.sh` 橋接腳本 | 處理 timeout / log / 錯誤分類 |
 
 ## 快速開始
@@ -55,14 +59,15 @@ flowchart LR
 ### 環境需求
 
 - [Codex CLI](https://github.com/openai/codex)（`npm i -g @openai/codex`）+ `OPENAI_API_KEY`
-- Python 3.13
+- Python 3.13 + [uv](https://github.com/astral-sh/uv)（Homebrew python 有 PEP 668 保護，直接 pip install 會被拒，用 uv 建虛擬環境最省事）
 - Claude Code 或 Codex CLI（讀取 `skills/` 底下的 skill 定義）
 
 ### 安裝步驟
 
 ```bash
-# 安裝 Python 依賴（含 rembg 去背用）
-pip install -r requirements.txt
+# 在專案根目錄建虛擬環境並安裝依賴（rembg 去背 + Flask Web UI）
+uv venv .venv --python 3.13
+uv pip install -r requirements.txt
 
 # 確認 Codex CLI 已安裝並設好 API key
 export OPENAI_API_KEY="your-key"
@@ -76,6 +81,8 @@ codex --version
 > 「照 skills/generate-tachie/SKILL.md 幫我生成角色紅榴的立繪」
 > 「幫我生成一張教室的黃昏背景」
 
+去背 Web UI 不經 agent，雙擊 `skills/remove-tachie-bg/webapp/start.command`（或跑 `.venv/bin/python3 skills/remove-tachie-bg/webapp/app.py`），瀏覽器開 <http://localhost:8765>，拖圖進去就能用。
+
 ## 專案結構
 
 ```
@@ -87,7 +94,8 @@ scripts/
 └── call-codex-imagegen.sh     # Codex CLI image_gen 橋接腳本
 skills/
 ├── generate-scene-bg/
-└── generate-tachie/
+├── generate-tachie/
+└── remove-tachie-bg/          # 帶圖去背：scripts/remove_bg.py + webapp/（本地 Web UI）
 requirements.txt
 LICENSE
 ```
@@ -98,7 +106,7 @@ LICENSE
 |------|------|
 | **一致性是 best-effort** | Prompt Anchor + 視覺參照，不是 LoRA 級的像素一致，多次生成外觀可能微幅飄移 |
 | **MVP 僅支援單一姿勢** | 一個角色目前只有一套姿勢＋六種表情差分，不同姿勢（坐姿、背面等）是刻意延後的 v2 範圍，不是遺漏 |
-| **去背無法保證零瑕疵** | 複雜髮型（雙馬尾、蕾絲等會形成封閉輪廓的設計）殘留機率較高；髮絲邊緣的高光筆觸是模型畫進線稿的內容，不是後製能修的東西，合成時要避開背景深色區域 |
+| **去背無法保證零瑕疵** | 主變數是輪廓開放度：封閉輪廓（雙馬尾內圈、圈狀配件）與髮束細縫圈住的背景，去背救不了，要在角色設計階段避開；髮絲邊緣的高光筆觸是模型畫進線稿的內容，後製也碰不到。檢查一律深底＋白底兩張都看——亮色瑕疵只在深底現形，綠邊／暗邊只在白底現形，單看一種會漏判一半 |
 | **沒有 Godot 專屬整合** | 輸出是通用 PNG + prompt.txt，沒有 export 成 Godot resource 或場景節點，素材要手動丟進遊戲專案 |
 | **對話 UI 尚未開始** | 三素材裡只完成 BG + 立繪，對話框/文字 UI 還在規劃階段 |
 
@@ -113,6 +121,8 @@ LICENSE
 去背這件事踩了不少坑。一開始以為所有「髮際線白邊」都是同一種問題，調 alpha clamp、調色彩去污染、加重 erosion，有時候有效有時候完全沒用，一度以為是自己參數沒調對。後來放大看 rembg 處理前的原始棋盤格圖才發現：白邊分兩種，一種是背景真的沒去乾淨（能靠後製修），另一種是模型自己畫在線稿裡的高光筆觸（頭髮邊緣的裝飾性亮線、飄出去的單根髮絲）——這種後製完全碰不到，因為 rembg 正確地把它當前景保留，不是它的錯。
 
 分辨方法很簡單：看原始生成圖，如果那個淺色元素在棋盤格背景上就已經看得到，那是畫出來的，不是去背殘留，後製救不了。這種只能靠兩件事解：prompt 明確禁止（對飄散髮絲有效），或乾脆讓合成背景在那個位置保持淺色，讓高光線自然融入看不出來——攝影棚白色背景就是這樣繞過去的。同樣道理，封閉輪廓（雙馬尾捲回碰到軀幹、圈狀配件）最好在角色設計階段就避開，而不是生成後才用 prompt 補救。早知道先看原圖再猜參數，能少走好幾輪。
+
+後來把「哪種背景最好去背」拿去量化，又被打臉一次。用像素統計比較綠幕和生圖工具輸出的假透明棋盤格：綠幕在邊緣留下 82.4% 的綠邊債，棋盤格是 0%，勝負看似分明。結果實戰碰上雙馬尾這種縫隙多的設計，排名直接翻掉——縫隙裡的殘留如果來自綠幕，還能靠去綠後製救回來；來自棋盤格的灰白殘留就無解了。真正的主變數是輪廓開放度，背景色只是保險絲：輪廓開放，什麼背景都乾淨；縫隙一多，選綠幕反而是留了條後路。現在選背景先看角色設計，不再問哪種背景最好。
 
 ## 授權
 
