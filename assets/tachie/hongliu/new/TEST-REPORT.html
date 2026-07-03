@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>紅榴立繪 · 去背測試報告</title>
+<style>
+  :root {
+    --bg: #f5f3ee; --surface: #fffdf8; --surface-2: #efece4;
+    --text: #26231d; --text-dim: #6b665c; --border: #ddd8cc;
+    --accent: #3a6ea5; --accent-soft: #e4edf6;
+    --good: #2e7d52; --good-soft: #e2f0e8;
+    --bad: #c0392b; --bad-soft: #f7e4e1;
+    --warn: #b8860b; --warn-soft: #f6eed6;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1815; --surface: #232019; --surface-2: #2c2820;
+      --text: #e8e3d8; --text-dim: #9a9384; --border: #3a352b;
+      --accent: #79a6d2; --accent-soft: #23303d;
+      --good: #6cc295; --good-soft: #1e2e26;
+      --bad: #e88b7d; --bad-soft: #33211e;
+      --warn: #d9b45f; --warn-soft: #302a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.75; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px 120px; }
+  header.hero {
+    padding: 56px 24px 40px; text-align: center;
+    border-bottom: 1px solid var(--border); margin-bottom: 8px;
+  }
+  header.hero .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  header.hero h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: -.01em; }
+  header.hero .meta { color: var(--text-dim); font-size: 13px; font-family: var(--mono); }
+  .verdict {
+    max-width: 860px; margin: 28px auto 0; padding: 20px 24px;
+    background: var(--accent-soft); border-left: 4px solid var(--accent);
+    border-radius: 8px; font-size: 16px;
+  }
+  .verdict strong { color: var(--accent); }
+  h2 {
+    font-size: 22px; margin: 52px 0 4px; padding-top: 14px;
+    letter-spacing: -.01em;
+  }
+  h2 .num { font-family: var(--mono); color: var(--accent); font-size: 15px; margin-right: 10px; }
+  h3 { font-size: 17px; margin: 30px 0 6px; color: var(--text); }
+  p { margin: 12px 0; }
+  .lead { color: var(--text-dim); }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; }
+  pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; overflow-x: auto;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 14.5px; }
+  .table-scroll { overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface-2); font-weight: 600; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .tag.good { background: var(--good-soft); color: var(--good); }
+  .tag.bad { background: var(--bad-soft); color: var(--bad); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .callout {
+    margin: 20px 0; padding: 16px 20px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .callout.good { background: var(--good-soft); border-color: transparent; }
+  .callout.bad { background: var(--bad-soft); border-color: transparent; }
+  .callout.warn { background: var(--warn-soft); border-color: transparent; }
+  .callout .label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 6px; }
+  .callout.good .label { color: var(--good); }
+  .callout.bad .label { color: var(--bad); }
+  .callout.warn .label { color: var(--warn); }
+  figure { margin: 24px 0; }
+  figure img { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  figcaption { font-size: 13px; color: var(--text-dim); margin-top: 8px; text-align: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 24px 0; }
+  .grid2 figure, .grid3 figure { margin: 0; }
+  @media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .stat { font-family: var(--mono); font-weight: 700; }
+  .stat.big { font-size: 34px; letter-spacing: -.02em; }
+  .stat.bad { color: var(--bad); }
+  .stat.good { color: var(--good); }
+  .statrow { display: flex; gap: 16px; flex-wrap: wrap; margin: 24px 0; }
+  .statcard { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .statcard .n { font-family: var(--mono); font-weight: 700; font-size: 30px; letter-spacing: -.02em; }
+  .statcard .l { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 24px; margin: 32px 0; }
+  .toc .label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; }
+  .toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; font-size: 14px; }
+  .toc li { margin: 4px 0; break-inside: avoid; }
+  @media (max-width: 640px) { .toc ol { columns: 1; } }
+  footer { text-align: center; color: var(--text-dim); font-size: 12.5px; font-family: var(--mono); margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .muted { color: var(--text-dim); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="kicker">Tachie Forge · De-background Test</div>
+  <h1>紅榴立繪 · 去背工具比較測試報告</h1>
+  <div class="meta">2026-07-03 &nbsp;·&nbsp; 子超 + Claude Code &nbsp;·&nbsp; assets/tachie/hongliu/new/</div>
+</header>
+
+<div class="verdict">
+  一句話結論:<strong>生圖工具要挑「輸出假透明／棋盤格背景」的,絕不用綠幕</strong>——綠幕會給去背留下 <span class="stat bad">82.4%</span> 的綠邊債。而去背成敗的<strong>主變數是髮型有沒有被框住(封閉輪廓)</strong>,那是 prompt 決定的;綠邊只是次要、可修的邊緣瑕疵。
+</div>
+
+<div class="wrap">
+
+<nav class="toc">
+  <div class="label">目錄</div>
+  <ol>
+    <li><a href="#bg">測試背景與目的</a></li>
+    <li><a href="#material">測試素材</a></li>
+    <li><a href="#method">測試方法 Pipeline</a></li>
+    <li><a href="#quant">量化結果</a></li>
+    <li><a href="#findings">逐階段發現</a></li>
+    <li><a href="#decisive">跨背景決定性測試</a></li>
+    <li><a href="#insight">核心洞見</a></li>
+    <li><a href="#archaeology">Prompt 考古</a></li>
+    <li><a href="#method2">方法論反思</a></li>
+    <li><a href="#conclusion">結論與建議</a></li>
+    <li><a href="#plan">三方向規劃</a></li>
+    <li><a href="#files">產出檔案清單</a></li>
+  </ol>
+</nav>
+
+<h2 id="bg"><span class="num">01</span>測試背景與目的</h2>
+<p><strong>動機</strong>:評估是否改用外部高解析度生圖工具(產出 6–8K 圖)取代現行 <code>generate-tachie</code> 的 gpt-image-2(1024),作為紅榴立繪的原圖來源。</p>
+<p><strong>核心問題</strong>:同一份 prompt 餵不同生圖工具,哪個產出的圖 (a) 正確理解角色設計語意、(b) 對我們的 rembg 去背流程最友善。</p>
+<p class="muted">範圍:本輪只在 <code>new/</code> 沙盒測試,不動正式的 <code>hongliu/</code> 檔案。</p>
+
+<h2 id="material"><span class="num">02</span>測試素材</h2>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>檔案</th><th>尺寸</th><th>內容</th><th>原圖背景</th></tr></thead>
+  <tbody>
+    <tr><td><code>h.png</code></td><td>6689×10033</td><td>紅榴,動態指人 waist-up</td><td>灰白棋盤格假透明</td></tr>
+    <tr><td><code>h2.png</code></td><td>3344×5017</td><td>demo(黑髮 bob)bust-up</td><td>灰白棋盤格假透明</td></tr>
+    <tr><td><code>h3.png</code></td><td>8192×8192</td><td>紅榴,neutral bust-up</td><td><span class="tag bad">純綠幕</span></td></tr>
+  </tbody>
+</table>
+</div>
+<div class="grid3">
+  <figure><img src="report_assets/preview_h.png" alt="h 原圖"><figcaption>h — 紅榴/假透明</figcaption></figure>
+  <figure><img src="report_assets/preview_h2.png" alt="h2 原圖"><figcaption>h2 — demo/假透明</figcaption></figure>
+  <figure><img src="report_assets/preview_h3.png" alt="h3 原圖"><figcaption>h3 — 紅榴/綠幕</figcaption></figure>
+</div>
+<div class="callout">
+  <span class="label">設計語意還原度</span>
+  <strong>h 與 h3 皆達標</strong>——雙馬尾、黑蝴蝶結、地雷系黑衣+粉蕾絲、深紅眼、十字架、開放輪廓間隙,兩者都正確畫出。差別不在「畫得對不對」,在「輸出背景」。<span class="muted">(h2 是 demo 對照組,非紅榴)</span>
+</div>
+
+<h2 id="method"><span class="num">03</span>測試方法 Pipeline</h2>
+<pre>原圖 → 縮長邊 1536(sips -Z 1536)
+     → rembg -m isnet-anime
+     → alpha clamp(α≥120→255, α≤30→0)
+     → ① 深底檢查合成 (30,30,38)
+     → ② 白底檢查合成 (255,255,255) + 量化綠色溢色
+     → ③ 場景合成:疊到 BG 驗證</pre>
+<p class="muted">縮到長邊 1536 的理由:立繪用不到 8K,超大圖 rembg 慢且不會更準。綠色溢色量化定義:半透明邊緣像素(30&lt;α&lt;255)中,滿足 g&gt;r+18 且 g&gt;b+18 的偏綠像素比例。</p>
+
+<h2 id="quant"><span class="num">04</span>量化結果</h2>
+<div class="statrow">
+  <div class="statcard"><div class="n good">0.0%</div><div class="l">h(假透明)綠色溢色</div></div>
+  <div class="statcard"><div class="n good">0.0%</div><div class="l">h2(假透明)綠色溢色</div></div>
+  <div class="statcard"><div class="n bad">82.4%</div><div class="l">h3(綠幕)綠色溢色</div></div>
+</div>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>圖</th><th>前景像素</th><th>半透明邊緣</th><th>邊緣占前景</th><th>偏綠(green spill)</th></tr></thead>
+  <tbody>
+    <tr><td>h</td><td>1,114,250</td><td>17,746</td><td>1.6%</td><td class="stat good">0(0.0%)</td></tr>
+    <tr><td>h2</td><td>855,282</td><td>7,528</td><td>0.9%</td><td class="stat good">0(0.0%)</td></tr>
+    <tr><td>h3</td><td>1,059,244</td><td>11,523</td><td>1.1%</td><td class="stat bad">9,495(82.4%)</td></tr>
+  </tbody>
+</table>
+</div>
+<p><strong>h3 的半透明邊緣有 82.4% 是綠色像素</strong>——這是綠幕方案的鐵證,h/h2(假透明)完全沒有。</p>
+
+<h2 id="findings"><span class="num">05</span>逐階段發現</h2>
+
+<h3>① 深底檢查 (30,30,38)</h3>
+<figure><img src="report_assets/compare_darkcheck.png" alt="深底檢查併排">
+  <figcaption>左→右:h(紅榴/假透明)、h2(demo/假透明)、h3(紅榴/綠幕),全部合成到深底 (30,30,38)</figcaption></figure>
+<ul>
+  <li><strong>h</strong>:輪廓乾淨無白邊 halo,唯一殘留是左右<strong>飄散的淺色髮絲</strong>(畫在稿裡的筆觸,rembg 正確判為前景,後製無效)。</li>
+  <li><strong>h2</strong>:幾乎完美。</li>
+  <li><strong>h3</strong>:輪廓乾淨——<strong>但綠邊被深底藏住了</strong>(暗綠 vs 深灰低對比)。深底看不出 h3 的問題。</li>
+</ul>
+<div class="callout warn"><span class="label">教訓</span>只看深底會漏判 h3。這也是一度覺得「h3 效果最好」的原因——深底是它的保護色。</div>
+
+<h3>② 白底檢查 (255,255,255)</h3>
+<figure><img src="report_assets/compare_whitecheck.png" alt="白底檢查併排">
+  <figcaption>換白底,h3 的綠邊現形;h 依然乾淨,飄髮反而隱形</figcaption></figure>
+<div class="grid2">
+  <figure><img src="report_assets/white_h.png" alt="h 白底"><figcaption>h — 髮際乾淨,無綠邊</figcaption></figure>
+  <figure><img src="report_assets/white_h3.png" alt="h3 白底"><figcaption>h3 — 馬尾外緣、髮尾綠色描邊</figcaption></figure>
+</div>
+<p><strong>白底是 h3 的照妖鏡,深底是 h 的照妖鏡。</strong></p>
+
+<h3>③「純白背景生圖最好」的釐清</h3>
+<div class="callout bad">
+  <span class="label">一度誤判,已修正</span>
+  測試中一度以為「直接生白色背景的圖去背最好」——<strong>因果搭錯</strong>:<code>white_h</code> 是<strong>去背後</strong>才合成白底的檢查圖,h 的原圖背景是<strong>棋盤格假透明,不是白色</strong>。
+</div>
+<p>純白<strong>不是</strong>通用最佳解:對深色角色(紅榴)尚可,但對<strong>淺髮/白衣角色</strong>,白底與白色邊緣<strong>低對比</strong>,rembg 會吃邊或留 halo(image matting 基本限制)。正解:<strong>中性、非飽和</strong>背景最友善 → 棋盤格假透明 ≈ 中性灰 &gt; 純白 &gt; 綠幕。</p>
+
+<h3>④ 場景合成(陰暗教室 classroom-horror)</h3>
+<figure><img src="report_assets/compare_composite_classroom.png" alt="陰暗教室合成併排">
+  <figcaption>三張立繪疊到陰暗教室。氣氛都契合,但去背邊緣在深色 BG 上表現不同</figcaption></figure>
+<div class="grid2">
+  <figure><img src="report_assets/composite_h_classroom.png" alt="h 教室合成"><figcaption>h — 右側垂胸長髮的淺色飄髮在深色課桌上現形</figcaption></figure>
+  <figure><img src="report_assets/composite_h3_classroom.png" alt="h3 教室合成"><figcaption>h3 — 看似乾淨,但綠邊是被「深 BG+綠黑板」掩護</figcaption></figure>
+</div>
+
+<h2 id="decisive"><span class="num">06</span>跨背景決定性測試</h2>
+<p class="lead">初步以陰暗教室合成時,h3 目測最乾淨,一度判定「h3 最好」。為驗證是否為場景僥倖,將 h 與 h3 同時合成到<strong>攝影棚白棚</strong>(平均亮度 200/255,最能暴露暗/綠邊)。</p>
+<div class="grid2">
+  <figure><img src="report_assets/on_photo_studio_h.png" alt="h 白棚"><figcaption>h(假透明)@ 白棚 — 髮際乾淨,飄髮隱形</figcaption></figure>
+  <figure><img src="report_assets/on_photo_studio_h3.png" alt="h3 白棚"><figcaption>h3(綠幕)@ 白棚 — <span style="color:var(--bad)">雙馬尾外緣、髮尾綠邊現形</span></figcaption></figure>
+</div>
+<div class="table-scroll">
+<table>
+  <thead><tr><th></th><th>陰暗教室(深 BG)</th><th>攝影棚白棚(亮 200/255)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>h3 綠邊</strong></td><td><span class="tag good">藏住</span></td><td><span class="tag bad">現形</span></td></tr>
+    <tr><td><strong>h 飄髮</strong></td><td><span class="tag bad">現形</span></td><td><span class="tag good">隱形</span></td></tr>
+    <tr><td><strong>當場目視贏家</strong></td><td>h3</td><td>h</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="callout"><span class="label">結論</span><strong>贏家隨背景翻盤,「h3 最好」只在深場景成立。</strong>但兩種瑕疵本質不同:
+  <ul style="margin:8px 0 0">
+    <li>h 飄髮 = 淺色,亮 BG 隱形 → <strong>選場景可迴避</strong></li>
+    <li>h3 綠邊 = 82.4% 綠色像素烙進圖裡,亮 BG 必露 → <strong>除非後製去綠,否則躲不掉</strong></li>
+  </ul>
+  ADV 角色會站進多種場景,故<strong>跨場景穩健性 h 來源勝</strong>。</div>
+
+<h2 id="insight"><span class="num">07</span>核心洞見</h2>
+
+<h3>洞見一:瑕疵類型 × 背景明暗 的對稱</h3>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>瑕疵</th><th>白底</th><th>深底 / 深色 BG</th></tr></thead>
+  <tbody>
+    <tr><td>亮色(白邊、亮髮絲)</td><td>隱形</td><td><strong>現形</strong></td></tr>
+    <tr><td>暗/綠色(green spill)</td><td><strong>現形</strong></td><td>被藏</td></tr>
+  </tbody>
+</table>
+</div>
+<p><strong>深色 BG 藏「暗/綠」瑕疵、暴露「亮」瑕疵;白色 BG 剛好相反。</strong>正確的合成迴避規則是「讓殘留邊疊在跟它顏色相近的區域」——比單向「別疊深色區」更完整。</p>
+
+<h3>洞見二:主變數 vs 次要變數</h3>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>變數</th><th>誰控制</th><th>h3 表現</th><th>性質</th></tr></thead>
+  <tbody>
+    <tr><td>髮型結構(封閉/開放)</td><td>prompt</td><td><span class="tag good">開放</span></td><td><strong>主變數,死局或通關</strong></td></tr>
+    <tr><td>邊緣顏色(綠邊/白邊)</td><td>背景指定</td><td>有綠邊</td><td>次要,可修</td></tr>
+  </tbody>
+</table>
+</div>
+<p><strong>封閉輪廓是 rembg 唯一完全無解的死局</strong>(被框在裡面的背景像素,再強的後製都碰不到);綠邊只是邊緣瑕疵、可修。h3 髮型開放做得好,是它「效果好」的真正原因——而髮型開不開放,是 prompt 決定的。<strong>兩個變數都歸 prompt 管</strong>,所以綠邊不是「綠幕原罪」,是「prompt 沒把背景指定好」。</p>
+
+<h2 id="archaeology"><span class="num">08</span>Prompt 考古:綠邊的根源</h2>
+<p>調出紅榴實際用過的 <code>hongliu_neutral.prompt.txt</code>——h3 綠邊的根源白紙黑字寫在裡面:</p>
+<pre>...Solid bright green #00FF00 background, flat uniform color... Single character, clean lines, no text, no UI.</pre>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>項目</th><th><code>.prompt.txt</code>(用的「之前 prompt」)</th><th><code>design.md</code> Anchor(現行)</th><th><code>SKILL.md</code>(源頭)</th></tr></thead>
+  <tbody>
+    <tr><td>背景指定</td><td><span class="tag bad">#00FF00 綠幕</span></td><td>未指定</td><td><span class="tag good">transparent</span></td></tr>
+    <tr><td>開放輪廓指示</td><td><span class="tag bad">完全沒有</span></td><td><span class="tag good">有</span></td><td><span class="tag good">有</span></td></tr>
+    <tr><td>髮際高光引導</td><td><span class="tag bad">無</span></td><td>無</td><td><span class="tag good">有</span></td></tr>
+    <tr><td>無飄髮 / clean-cut</td><td><span class="tag bad">無</span></td><td>無</td><td><span class="tag good">有</span></td></tr>
+  </tbody>
+</table>
+</div>
+<div class="callout bad"><span class="label">深層病根</span>這份 <code>.prompt.txt</code> 是 7/1 的「化石」——要綠幕、沒有開放輪廓指示,<strong>沒跟上 SKILL.md 後來的硬化</strong>。用它測試等於用過時規則,難怪得到綠幕。SKILL.md 才是 source of truth,角色資料夾的舊 <code>.prompt.txt</code> 是會過時的存檔(所以也<strong>不該回頭改它</strong>,要生新的)。</div>
+<div class="callout good"><span class="label">反直覺結論</span><strong>SKILL.md 現行版其實已經有你要的東西</strong>——開放輪廓 + 中性透明背景。落後的是測試用的舊 prompt,不是 skill 本身。</div>
+
+<h2 id="method2"><span class="num">09</span>方法論反思:肉眼為主,量化為輔</h2>
+<ul>
+  <li><strong>真正做判斷的自始至終是肉眼。</strong>發現綠邊、飄髮、選構圖,都是眼睛一看即知;量化(82.4%、亮度值)是事後把肉眼所見數字化,提供可追溯紀錄,不是判斷的來源。</li>
+  <li><strong>肉眼唯一盲點:一次只能評估「當下擺在眼前的那張背景」。</strong>單看陰暗教室會誤判 h3 最好(綠邊被深 BG+綠黑板掩護)。破解法不是量化,是<strong>換背景再看</strong>——白棚一擺,肉眼一秒看穿。</li>
+  <li><strong>量化不可取代的唯一場合:批次生成(數十張)無法逐張目視時,當自動篩選門檻。</strong>手動比少數幾張,肉眼即足夠。</li>
+</ul>
+<div class="callout"><span class="label">定案流程</span>每張立繪合成到「<strong>一深一亮</strong>」兩種背景並排目視:深底抓亮邊(白邊/飄髮)、亮底抓暗/綠邊(green spill),兩張一擺,好壞一眼定奪,不需讀數字。</div>
+
+<h2 id="conclusion"><span class="num">10</span>結論與建議</h2>
+<ul>
+  <li><span class="tag good">採用</span> 會輸出<strong>假透明/棋盤格背景</strong>、且正確理解開放輪廓語意的生圖工具(h 來源)。</li>
+  <li><span class="tag bad">淘汰</span> 輸出綠幕的工具(h3 來源)——除非能改成假透明輸出,否則綠邊債不值得多一道去綠工序。</li>
+</ul>
+<p><strong>待辦(非本報告範圍):</strong></p>
+<ul>
+  <li><code>generate-tachie</code> SKILL.md:Post-Process 補「雙底檢查」(現僅深底)。</li>
+  <li>若確定換生圖來源:SKILL.md Step 2/3 定位從「呼叫 codex 生圖」調整為「管理外部高解析圖 + 去背」。</li>
+  <li>決定性岔路未定:繼續 gpt-image-2,還是改用外部高解析工具(需先確認它支不支援假透明輸出)。</li>
+</ul>
+
+<h2 id="plan"><span class="num">11</span>三方向規劃(未實作)</h2>
+<p>去背這件事依「圖的來源」分三個方向,對應 pipeline 三段:</p>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>方向</th><th>定位</th><th>狀態</th></tr></thead>
+  <tbody>
+    <tr><td>① 角色設計</td><td>開放動作/髮型、避開封閉輪廓(通用、不綁角色)→ 讓角色天生好去背</td><td>待規劃</td></tr>
+    <tr><td>② 生成側</td><td>準備/生成立繪,控制中性背景 + 邊緣 anti-artifact</td><td>待規劃</td></tr>
+    <tr><td>③ 帶圖去背</td><td>拿一張現成立繪,只做去背 + 事後製作</td><td><span class="tag warn">已規劃,plan-critic 打回</span></td></tr>
+  </tbody>
+</table>
+</div>
+<h3>方向三 MVP(plan-critic 砍過後)</h3>
+<pre>輸入動漫立繪 → 縮到長邊 1536 → rembg isnet-anime + alpha clamp
+  → (使用者說是綠幕/純色才) 去污染
+  → 深底+白底雙預覽給肉眼看
+  → 輸出透明 PNG
+無解情況(封閉輪廓/畫出來的飄髮)當場口頭講,不自動偵測</pre>
+<div class="callout warn"><span class="label">plan-critic 結果:1 FAIL + 4 WARN</span>
+  最該擋下的是「<strong>抽共用核心去重構 generate-tachie</strong>」——那會動到剛硬化、零實戰驗證的 Post-Process。方向三應<strong>獨立、自帶去背邏輯</strong>,不碰 generate-tachie。其餘砍掉:背景自動分類、自動無解報告、去綠可配置、批次。隱藏假設要處理:限定動漫風格(isnet-anime 邊界)、拿掉「完美去背」措辭(物理無解)。
+</div>
+
+<h2 id="files"><span class="num">12</span>產出檔案清單</h2>
+<p><strong>保留</strong></p>
+<ul>
+  <li><code>h.png</code> / <code>h2.png</code> / <code>h3.png</code> — 外部生成原圖,供未來對照/重測(尚未進 git)</li>
+  <li><code>TEST-REPORT.md</code> — 初版(僅前 8 節);<code>TEST-REPORT.html</code> — 本完整報告</li>
+  <li><code>compare_*.png</code> / <code>composite_*.png</code> — 各階段比較圖</li>
+  <li><code>report_assets/</code> — 本 HTML 引用的全部圖(18 張,含跨背景證據 <code>on_photo_studio_*</code>)</li>
+</ul>
+<p class="muted">判斷依據為肉眼目視合成圖;結論、數據、對照關係已完整記錄於本報告。原圖 h.png/h3.png 各約 80MB。</p>
+
+<footer>
+  Tachie Forge · 去背測試報告 · 2026-07-03<br>
+  生成:Claude Code &nbsp;|&nbsp; 覆核:子超
+</footer>
+
+</div>
+</body>
+</html>
