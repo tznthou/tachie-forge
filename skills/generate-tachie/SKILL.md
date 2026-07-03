@@ -79,17 +79,14 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
    - Framing: "waist-up portrait" / "bust-up" / "full-body standing"
    - Expression: "neutral expression, calm face"
    - "Single character, clean lines, no text, no UI"
-   - "Hair strands and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
-   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette"
-   - "If the hair rendering includes any glossy shine or highlight accents, they must be placed only near the crown/top of the head, well inside the silhouette and away from any edge — the outer silhouette edge and the tapered strand tips must remain a uniform flat dark tone with zero highlight, since any brightness at the very edge or tip directly touches the transparent background boundary"
-   - "The character silhouette should have a crisp, high-contrast, clean-cut edge against the background — avoid soft blending, gradient fading, or anti-aliased blur at the outline boundary"
+   - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim (apply the non-dark-hair adaptation if the character's hair is not dark)
    - Art style cues matching the chosen `art_style`
    - Request transparent background in the prompt (gpt-image-2 renders a checkered-pattern fake transparency)
 2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh --size <size> -o <output-path> "<prompt>"` — this bridges to Codex CLI's `image_gen`.
-3. Post-process: run `rembg i -m isnet-anime <raw>.png <output_rembg>.png` then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with `isnet-anime` model.
+3. Post-process and inspect per the **Post-Process & Artifact Check** section below.
 4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
 5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
-6. Show the result to the user for approval before generating variants.
+6. Show the result (transparent PNG **and** the dark-background check) to the user for approval before generating variants.
 
 ### Step 3 — Generate Expression Variants
 
@@ -101,14 +98,37 @@ For each requested expression (or all 6 MVP expressions: smile, angry, sad, surp
    - Same framing as the base
    - "Use the visible image above as the visual reference — preserve the exact character design, outfit, hair, pose, and proportions. Change only the facial expression."
    - The target expression: describe it concretely (e.g., "angry expression: furrowed brows, clenched jaw, sharp eyes" not just "angry")
-   - "Single character, no text, hair and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
-   - "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette"
-   - "If the hair rendering includes any glossy shine or highlight accents, they must be placed only near the crown/top of the head, well inside the silhouette and away from any edge — the outer silhouette edge and the tapered strand tips must remain a uniform flat dark tone with zero highlight, since any brightness at the very edge or tip directly touches the transparent background boundary"
-   - "The character silhouette should have a crisp, high-contrast, clean-cut edge against the background — avoid soft blending, gradient fading, or anti-aliased blur at the outline boundary"
-3. Generate, then post-process with `rembg i -m isnet-anime` + alpha clamp.
+   - "Single character, no text"
+   - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim (apply the non-dark-hair adaptation if the character's hair is not dark)
+3. Generate, then post-process and inspect per the **Post-Process & Artifact Check** section below.
 4. Save as `<character_name>_<expression>.png` with `.prompt.txt`.
 
 This is best-effort consistency — image generation cannot guarantee identical appearance across variants. The Prompt Anchor + visual reference handoff improves consistency but is not pixel-perfect.
+
+## Anti-Artifact Prompt Lines
+
+Include every line below verbatim in every generation prompt — base (Step 2) and variants (Step 3). This wording was tuned via a 5-round autoresearch loop (2026-07-02): median edge-artifact severity dropped from 4 to 1. Do NOT "sharpen" it with technique names (e.g. "rim lighting") or exact fractions (e.g. "upper quarter") — both were tested and made results worse (see Known Limitation).
+
+- "Hair strands and clothing edges should not form a closed silhouette — leave visible gaps between hair and outfit so the background is clearly separable"
+- "No flyaway hair strands, no stray loose hair strands separated from the main hair silhouette"
+- "If the hair rendering includes any glossy shine or highlight accents, they must be placed only near the crown/top of the head, well inside the silhouette and away from any edge — the outer silhouette edge and the tapered strand tips must remain a uniform flat dark tone with zero highlight, since any brightness at the very edge or tip directly touches the transparent background boundary"
+- "The character silhouette should have a crisp, high-contrast, clean-cut edge against the background — avoid soft blending, gradient fading, or anti-aliased blur at the outline boundary"
+
+**Non-dark hair adaptation**: the validated wording assumes dark hair — the loop's test character was black-haired. For a blonde/silver/pink/white-haired character, "a uniform flat dark tone" contradicts the design and may confuse the model or darken the hair edges. Replace it with "a uniform flat tone of the hair's base color" in the highlight-placement line. This substitution is semantically required but has not been loop-validated.
+
+## Post-Process & Artifact Check
+
+Run this sequence after every generation (base and variants):
+
+1. **Background removal**: `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model.
+2. **Dark-background check**: edge artifacts (light rim strokes, residual halo) are invisible against white or checkered previews and only show against dark tones — inspecting only the transparent PNG will miss them. Composite over a dark backdrop and look at the hair silhouette:
+
+   ```bash
+   python3 -c "from PIL import Image; fg=Image.open('<output>.png').convert('RGBA'); bg=Image.new('RGBA', fg.size, (30,30,38,255)); bg.alpha_composite(fg); bg.convert('RGB').save('<output>_darkcheck.png')"
+   ```
+
+   Show this preview alongside the transparent PNG when asking for approval. The `_darkcheck` file is scratch — delete it after review, never commit it.
+3. **Retry discipline**: if the dark check shows severe edge highlights, regenerate once with the exact same prompt before editing any wording. The validated prompt has low median severity but non-zero variance — a same-prompt redraw is cheap and safe, while "improving" the wording has twice been shown to backfire (see Known Limitation).
 
 ## Expression Descriptions
 
@@ -152,6 +172,7 @@ assets/tachie/
 
 - All images for one character share the same framing and approximate proportions
 - Transparent background (no solid color background baked in)
+- Dark-background artifact check performed on every accepted image (edge artifacts are invisible against light or checkered previews)
 - Prompt Anchor text appears verbatim in every prompt
 - Design doc exists before any generation
 - Prompt file saved alongside every generated image
@@ -160,9 +181,9 @@ assets/tachie/
 
 The image model has a strong tendency to render a thin light-colored rim-light stroke along the hair silhouette edge, especially near strand tips (a common anime rendering convention, baked into the artwork itself). This is not a background-removal artifact — `rembg` correctly keeps these pixels as foreground, so no alpha-clamp or erosion post-processing can remove it.
 
-Directly instructing the model to avoid all hair highlights is unreliable and can backfire — naming specific rendering techniques (e.g. "rim lighting", "specular highlights") or pointing at specific parts (e.g. "tips") sometimes increases their occurrence instead of suppressing it, likely a diffusion model attention artifact. What works better, validated via autoresearch-loop iteration (2026-07-02): instructing the model to confine any highlight near the crown/top of the head, away from the silhouette edge and strand tips, redirects the highlight to a harmless location instead of fighting the model's rendering prior — this is the instruction now baked into both Step 2 and Step 3. This reduced edge-highlight severity from a median rubric score of 4 down to 1 across repeated trials on the Step 2 (text-to-image) path, though it does not fully eliminate the risk on every generation. Step 3 (image-to-image variant generation with visual reference) was not independently tested via autoresearch-loop — the same instruction was applied there for consistency, on the reasoning that the post-processing pipeline and the model's rendering prior are the same regardless of expression. A follow-up attempt to make the boundary even more precise (exact fractions like "upper quarter") backfired the same way as naming specific techniques — the vaguer-but-correctly-aimed instruction outperformed the more precise one.
+Directly instructing the model to avoid all hair highlights is unreliable and can backfire — naming specific rendering techniques (e.g. "rim lighting", "specular highlights") or pointing at specific parts (e.g. "tips") sometimes increases their occurrence instead of suppressing it, likely a diffusion model attention artifact. What works better, validated via autoresearch-loop iteration (2026-07-02): instructing the model to confine any highlight near the crown/top of the head, away from the silhouette edge and strand tips, redirects the highlight to a harmless location instead of fighting the model's rendering prior — this is the highlight-placement line of the Anti-Artifact Prompt Lines section, used by both Step 2 and Step 3. This reduced edge-highlight severity from a median rubric score of 4 down to 1 across repeated trials on the Step 2 (text-to-image) path, though it does not fully eliminate the risk on every generation. Step 3 (image-to-image variant generation with visual reference) was not independently tested via autoresearch-loop — the same instruction was applied there for consistency, on the reasoning that the post-processing pipeline and the model's rendering prior are the same regardless of expression. A follow-up attempt to make the boundary even more precise (exact fractions like "upper quarter") backfired the same way as naming specific techniques — the vaguer-but-correctly-aimed instruction outperformed the more precise one.
 
-Workaround for residual cases: when compositing, avoid placing the character's hair silhouette directly over dark areas of the background (e.g., shift horizontal position, or pick a scene with a light-toned area behind the head). This remains a useful compositing-time safety net, not a replacement for the prompt-level mitigation above.
+Workaround for residual cases: first regenerate once with the same prompt (see Post-Process & Artifact Check — the distribution has low median but non-zero variance); if the artifact persists, avoid placing the character's hair silhouette directly over dark areas of the background when compositing (e.g., shift horizontal position, or pick a scene with a light-toned area behind the head). The compositing-time dodge remains a useful safety net, not a replacement for the prompt-level mitigation above.
 
 ## Boundaries
 
