@@ -1,3 +1,6 @@
-numpy>=1.26
+# numpy 上限: numba (rembg→pymatting→numba 依賴鏈) 對 numpy 有版本上限,
+# 不設上限時 uv 會回溯解析到古董 numba/llvmlite (只支援 py<=3.9), 在 py3.13 build 失敗
+numpy>=1.26,<2.5
 Pillow>=10.0
 rembg[cpu]>=2.0
+flask>=3.0

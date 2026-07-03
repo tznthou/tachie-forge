@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>立繪去背系統 — Tachie Forge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂️</text></svg>">
+<style>
+  :root {
+    --bg: #17181c;
+    --panel: #1f2127;
+    --panel-2: #262932;
+    --line: #34374040;
+    --line-solid: #343740;
+    --text: #e8e6e0;
+    --muted: #9a9890;
+    --accent: #e0645a;
+    --accent-soft: #e0645a22;
+    --ok: #6fbf8f;
+    --err: #e07a72;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "PingFang TC", "Noto Sans TC", -apple-system, "Helvetica Neue", sans-serif;
+    min-height: 100vh;
+    padding: 36px 24px 72px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header { margin-bottom: 28px; }
+  .kicker {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 6px;
+  }
+  h1 { font-size: 26px; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line-solid);
+    border-radius: 14px;
+    padding: 22px;
+  }
+
+  /* ---- dropzone ---- */
+  #drop {
+    display: block;
+    border: 2px dashed var(--line-solid);
+    border-radius: 12px;
+    padding: 34px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    outline: none;
+  }
+  #drop:hover, #drop:focus-visible, #drop.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  #drop .big { font-size: 16px; font-weight: 600; }
+  #drop .hint { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  #picked { display: none; align-items: center; gap: 14px; margin-top: 16px; }
+  #picked.show { display: flex; }
+  #picked img {
+    width: 72px; height: 72px; object-fit: contain;
+    background: var(--panel-2); border-radius: 8px; border: 1px solid var(--line-solid);
+  }
+  #picked .name { font-size: 14px; font-weight: 600; word-break: break-all; }
+  #picked .dim { color: var(--muted); font-size: 12px; }
+
+  /* ---- options ---- */
+  fieldset { border: 0; margin-top: 20px; }
+  legend { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .opt {
+    display: flex; align-items: baseline; gap: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-solid);
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color .15s;
+    flex: 1 1 220px;
+  }
+  .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .opt input { accent-color: var(--accent); }
+  .opt .t { font-size: 14px; font-weight: 600; }
+  .opt .d { font-size: 12px; color: var(--muted); }
+
+  /* ---- run button ---- */
+  .runrow { display: flex; align-items: center; gap: 16px; margin-top: 22px; flex-wrap: wrap; }
+  #run {
+    background: var(--accent); color: #fff;
+    border: 0; border-radius: 10px;
+    font: inherit; font-size: 15px; font-weight: 700;
+    padding: 12px 34px; cursor: pointer;
+    transition: filter .15s;
+  }
+  #run:hover:not(:disabled) { filter: brightness(1.1); }
+  #run:disabled { opacity: .45; cursor: not-allowed; }
+  #status { font-size: 14px; color: var(--muted); }
+  #status.err { color: var(--err); font-weight: 600; }
+  #status.ok { color: var(--ok); }
+  .spin {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--muted); border-top-color: var(--accent);
+    border-radius: 50%; vertical-align: -2px; margin-right: 8px;
+    animation: r .8s linear infinite;
+  }
+  @keyframes r { to { transform: rotate(360deg); } }
+
+  /* ---- results ---- */
+  #results { display: none; margin-top: 28px; }
+  #results.show { display: block; }
+  .note {
+    background: var(--panel-2); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 18px;
+  }
+  .note b { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .cell { background: var(--panel); border: 1px solid var(--line-solid); border-radius: 14px; padding: 16px; }
+  .cell h3 { font-size: 15px; }
+  .cell .what { font-size: 12px; color: var(--muted); margin: 2px 0 12px; }
+  .imgbox {
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line-solid);
+  }
+  .imgbox img { display: block; width: 100%; height: auto; }
+  .checker {
+    background:
+      conic-gradient(#3a3d46 90deg, #2b2d34 90deg 180deg, #3a3d46 180deg 270deg, #2b2d34 270deg)
+      0 0 / 22px 22px;
+  }
+  #dl {
+    display: inline-block; margin-top: 12px;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    padding: 8px 18px;
+    transition: background .15s;
+  }
+  #dl:hover { background: var(--accent-soft); }
+
+  details { margin-top: 18px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  pre {
+    background: var(--panel-2); border-radius: 8px; padding: 12px 14px;
+    font: 12px/1.7 ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--muted); white-space: pre-wrap; word-break: break-all; margin-top: 8px;
+  }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Tachie Forge · Remove Background</div>
+  <h1>立繪去背系統</h1>
+  <div class="sub">拖一張現成立繪進來 → 去背成透明 PNG → 深底／白底雙檢查 → 滿意就下載</div>
+</header>
+
+<div class="card">
+  <label id="drop" for="file" tabindex="0" role="button" aria-label="選擇或拖入圖片">
+    <div class="big">拖圖到這裡，或點擊選擇檔案</div>
+    <div class="hint">也可以直接 ⌘V 貼上剪貼簿裡的圖片 ｜ 動漫風格立繪效果最好</div>
+  </label>
+  <input type="file" id="file" accept="image/*" hidden>
+
+  <div id="picked">
+    <img id="thumb" alt="已選圖片預覽">
+    <div>
+      <div class="name" id="fname"></div>
+      <div class="dim" id="fdim"></div>
+    </div>
+  </div>
+
+  <fieldset>
+    <legend>原圖背景是哪一種？</legend>
+    <div class="opts">
+      <label class="opt"><input type="radio" name="bg" value="transparent" checked>
+        <span><span class="t">假透明棋盤格</span><br><span class="d">生圖工具輸出的灰白格子</span></span></label>
+      <label class="opt"><input type="radio" name="bg" value="green">
+        <span><span class="t">綠幕</span><br><span class="d">會多做去綠處理（其他選項不會）</span></span></label>
+      <label class="opt"><input type="radio" name="bg" value="solid">
+        <span><span class="t">其他單色</span><br><span class="d">白底、灰底等</span></span></label>
+      <label class="opt"><input type="radio" name="bg" value="other">
+        <span><span class="t">其他／不確定</span><br><span class="d">走標準去背流程</span></span></label>
+    </div>
+  </fieldset>
+
+  <div class="runrow">
+    <button id="run" disabled>開始去背</button>
+    <span id="status"></span>
+  </div>
+</div>
+
+<div id="results">
+  <div class="note">
+    <b>兩張檢查圖都要看</b>——亮色瑕疵（白邊、亮飄髮）只在深底現形，綠邊／暗邊只在白底現形，單看一種會漏判一半。
+    封閉輪廓內圈殘留與畫在稿裡的飄髮是去背救不了的，要回生圖端調整。
+  </div>
+  <div class="grid">
+    <div class="cell">
+      <h3>透明成品</h3>
+      <div class="what">棋盤格為預覽底，實際輸出是透明 PNG</div>
+      <div class="imgbox checker"><img id="img-cut" alt="去背後的透明成品"></div>
+      <a id="dl" download="cutout.png">下載透明 PNG</a>
+    </div>
+    <div class="cell">
+      <h3>深底檢查</h3>
+      <div class="what">抓「亮色」瑕疵：白邊、亮色飄髮絲</div>
+      <div class="imgbox"><img id="img-dark" alt="深色背景檢查圖"></div>
+    </div>
+    <div class="cell">
+      <h3>白底檢查</h3>
+      <div class="what">抓「暗／綠色」瑕疵：green spill 綠邊</div>
+      <div class="imgbox"><img id="img-white" alt="白色背景檢查圖"></div>
+    </div>
+  </div>
+  <details>
+    <summary>處理紀錄</summary>
+    <pre id="log"></pre>
+  </details>
+</div>
+
+<footer>Tachie Forge · remove-tachie-bg · 本地執行，圖片不離開這台電腦</footer>
+</div>
+
+<script>
+(function () {
+  var drop = document.getElementById("drop");
+  var fileInput = document.getElementById("file");
+  var picked = document.getElementById("picked");
+  var thumb = document.getElementById("thumb");
+  var fname = document.getElementById("fname");
+  var fdim = document.getElementById("fdim");
+  var run = document.getElementById("run");
+  var status = document.getElementById("status");
+  var results = document.getElementById("results");
+  var dl = document.getElementById("dl");
+  var current = null;   // File
+  var timer = null;
+
+  function setStatus(html, cls) {
+    status.className = cls || "";
+    status.innerHTML = html;
+  }
+
+  function pick(file) {
+    if (!file || !file.type.startsWith("image/")) {
+      setStatus("這不是圖片檔", "err");
+      return;
+    }
+    current = file;
+    var url = URL.createObjectURL(file);
+    thumb.src = url;
+    fname.textContent = file.name || "剪貼簿圖片.png";
+    fdim.textContent = (file.size / 1024 / 1024).toFixed(1) + " MB";
+    var probe = new Image();
+    probe.onload = function () {
+      fdim.textContent = probe.naturalWidth + " × " + probe.naturalHeight
+        + " ｜ " + (file.size / 1024 / 1024).toFixed(1) + " MB";
+    };
+    probe.src = url;
+    picked.classList.add("show");
+    run.disabled = false;
+    setStatus("");
+  }
+
+  // click 由 <label for="file"> 原生行為開啟檔案對話框（不依賴 JS）; keyboard 用 JS 保底
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+  });
+  fileInput.addEventListener("change", function () { pick(fileInput.files[0]); });
+
+  // drag & drop
+  ["dragover", "dragenter"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("dragover"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer.files.length) pick(e.dataTransfer.files[0]);
+  });
+
+  // paste
+  document.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.files;
+    if (items && items.length) pick(items[0]);
+  });
+
+  run.addEventListener("click", function () {
+    if (!current) return;
+    run.disabled = true;
+    results.classList.remove("show");
+    var t0 = Date.now();
+    setStatus('<span class="spin"></span>去背中… 0 秒（大圖約需一分鐘）');
+    timer = setInterval(function () {
+      var s = Math.round((Date.now() - t0) / 1000);
+      setStatus('<span class="spin"></span>去背中… ' + s + " 秒（大圖約需一分鐘）");
+    }, 1000);
+
+    var fd = new FormData();
+    fd.append("image", current, current.name || "pasted.png");
+    fd.append("bg_type", document.querySelector('input[name="bg"]:checked').value);
+
+    fetch("/api/remove", { method: "POST", body: fd })
+      .then(function (r) {
+        return r.json().catch(function () {
+          throw new Error("伺服器回應異常（HTTP " + r.status + "）");
+        });
+      })
+      .then(function (j) {
+        if (j.error) throw new Error(j.error);
+        document.getElementById("img-cut").src = j.cutout;
+        document.getElementById("img-dark").src = j.dark || "";
+        document.getElementById("img-white").src = j.white || "";
+        document.getElementById("log").textContent = j.log || "(無輸出)";
+        dl.href = j.cutout;
+        var base = (current.name || "cutout.png").replace(/\.[^.]+$/, "");
+        dl.download = base + "_cut.png";
+        results.classList.add("show");
+        var s = Math.round((Date.now() - t0) / 1000);
+        setStatus("完成（" + s + " 秒）— 記得深底、白底兩張都看", "ok");
+      })
+      .catch(function (err) {
+        setStatus("失敗：" + err.message, "err");
+      })
+      .finally(function () {
+        clearInterval(timer);
+        run.disabled = false;
+      });
+  });
+})();
+</script>
+</body>
+</html>
