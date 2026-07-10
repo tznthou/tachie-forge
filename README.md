@@ -7,7 +7,7 @@
 
 | 背景 | 立繪 | 合成 |
 |------|------|------|
-| ![場景背景](assets/bg/photo-studio.png) | ![角色立繪](assets/tachie/demo/demo_composite_white.png) | ![合成畫面](assets/tachie/demo/demo_composite_studio.png) |
+| [![場景背景](docs/img/photo-studio.webp)](assets/bg/photo-studio.png) | [![角色立繪](docs/img/demo_composite_white.webp)](assets/tachie/demo/demo_composite_white.png) | [![合成畫面](docs/img/demo_composite_studio.webp)](assets/tachie/demo/demo_composite_studio.png) |
 
 ## 核心概念
 
