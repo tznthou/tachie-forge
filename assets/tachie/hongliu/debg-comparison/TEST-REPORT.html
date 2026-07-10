@@ -109,7 +109,7 @@
 <header class="hero">
   <div class="kicker">Tachie Forge · De-background Test</div>
   <h1>紅榴立繪 · 去背工具比較測試報告</h1>
-  <div class="meta">2026-07-03 &nbsp;·&nbsp; 子超 + Claude Code &nbsp;·&nbsp; assets/tachie/hongliu/new/</div>
+  <div class="meta">2026-07-03 &nbsp;·&nbsp; 子超 + Claude Code &nbsp;·&nbsp; assets/tachie/hongliu/debg-comparison/</div>
 </header>
 
 <div class="verdict">
@@ -139,7 +139,7 @@
 <h2 id="bg"><span class="num">01</span>測試背景與目的</h2>
 <p><strong>動機</strong>:評估是否改用外部高解析度生圖工具(產出 6–8K 圖)取代現行 <code>generate-tachie</code> 的 gpt-image-2(1024),作為紅榴立繪的原圖來源。</p>
 <p><strong>核心問題</strong>:同一份 prompt 餵不同生圖工具,哪個產出的圖 (a) 正確理解角色設計語意、(b) 對我們的 rembg 去背流程最友善。</p>
-<p class="muted">範圍:本輪只在 <code>new/</code> 沙盒測試,不動正式的 <code>hongliu/</code> 檔案。</p>
+<p class="muted">範圍:本輪只在 <code>debg-comparison/</code>(當時名 <code>new/</code>)沙盒測試,不動正式的 <code>hongliu/</code> 檔案。</p>
 
 <h2 id="material"><span class="num">02</span>測試素材</h2>
 <div class="table-scroll">
@@ -338,10 +338,10 @@
 <ul>
   <li><code>h.png</code> / <code>h2.png</code> / <code>h3.png</code> — 外部生成原圖,供未來對照/重測(尚未進 git)</li>
   <li><code>TEST-REPORT.md</code> — 初版(僅前 8 節);<code>TEST-REPORT.html</code> — 本完整報告</li>
-  <li><code>compare_*.png</code> / <code>composite_*.png</code> — 各階段比較圖</li>
-  <li><code>report_assets/</code> — 本 HTML 引用的全部圖(18 張,含跨背景證據 <code>on_photo_studio_*</code>)</li>
+  <li><code>report_assets/</code> — 本 HTML 引用的全部圖(17 張,含跨背景證據 <code>on_photo_studio_*</code>、各階段比較圖 <code>compare_*</code> / <code>composite_*</code>)</li>
 </ul>
-<p class="muted">判斷依據為肉眼目視合成圖;結論、數據、對照關係已完整記錄於本報告。原圖 h.png/h3.png 各約 80MB。</p>
+<p class="muted">判斷依據為肉眼目視合成圖;結論、數據、對照關係已完整記錄於本報告。原圖 h.png/h3.png 各約 80MB。<br>
+2026-07-10 補記:<code>on_photo_studio_*</code> 兩張曾佚失,依 03 節管線自 h/h3 原圖重建;重建之白底檢查圖與原輸出逐像素零差異、綠色溢色 82.4% 逐位元重現,證據等價。</p>
 
 <footer>
   Tachie Forge · 去背測試報告 · 2026-07-03<br>

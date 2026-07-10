@@ -1,6 +1,6 @@
 # 紅榴立繪 — 去背工具比較測試報告
 
-> 測試日期：2026-07-03 ｜ 執行：子超 + Claude Code ｜ 資料夾：`assets/tachie/hongliu/new/`
+> 測試日期：2026-07-03 ｜ 執行：子超 + Claude Code ｜ 資料夾：`assets/tachie/hongliu/debg-comparison/`
 > 一句話結論：**生圖工具要挑「輸出假透明／棋盤格背景」的,絕不用綠幕——綠幕會給去背留下 82.4% 的綠邊債。**
 
 ---

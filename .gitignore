@@ -13,7 +13,7 @@ test-output/
 final-comparison.md
 
 # external-tool test source images (~170MB, near GitHub's 100MB/file limit;
-# reports and evidence crops in new/ ARE committed)
-assets/tachie/hongliu/new/h.png
-assets/tachie/hongliu/new/h2.png
-assets/tachie/hongliu/new/h3.png
+# reports and evidence crops in debg-comparison/ ARE committed)
+assets/tachie/hongliu/debg-comparison/h.png
+assets/tachie/hongliu/debg-comparison/h2.png
+assets/tachie/hongliu/debg-comparison/h3.png

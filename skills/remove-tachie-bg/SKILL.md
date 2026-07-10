@@ -55,7 +55,7 @@ When the dark check shows light patches, tell apart the two causes by comparing 
 
 If the dual check shows either of these, **say plainly "de-background can't fix this"** — do not pretend it's clean:
 
-- **Closed silhouette, including its MICRO version** — background trapped inside enclosed regions. Macro: twin-tails curling back against the torso. Micro: **thin slits between hair strands, hair-vs-neck gaps in dynamic poses** — each slit is a tiny semi-enclosed region rembg can't reach. On checkered/fake-transparent sources the trapped background survives as light-gray patches (sometimes with visible checker texture) that only the dark check reveals. Verified 2026-07-03: `assets/tachie/hongliu/new/report_assets/verify_gap_residue.png`
+- **Closed silhouette, including its MICRO version** — background trapped inside enclosed regions. Macro: twin-tails curling back against the torso. Micro: **thin slits between hair strands, hair-vs-neck gaps in dynamic poses** — each slit is a tiny semi-enclosed region rembg can't reach. On checkered/fake-transparent sources the trapped background survives as light-gray patches (sometimes with visible checker texture) that only the dark check reveals. Verified 2026-07-03: `assets/tachie/hongliu/debg-comparison/report_assets/verify_gap_residue.png`
 - **Painted-in light strokes** (flyaway strands, outline highlights drawn into the artwork) → `rembg` correctly keeps them as foreground; alpha/erosion post-processing is useless
 
 These are design/drawing-stage problems, unsolvable at the de-background stage. The honest move is to name them and point at where they are.
