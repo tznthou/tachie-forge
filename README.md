@@ -66,7 +66,8 @@ flowchart LR
 
 ```bash
 # 在專案根目錄建虛擬環境並安裝依賴（rembg 去背 + Flask Web UI）
-uv venv .venv --python 3.13
+# Python 版本由 .python-version 指定，uv 會自動選用
+uv venv .venv
 uv pip install -r requirements.txt
 
 # 確認 Codex CLI 已安裝並設好 API key
