@@ -86,7 +86,7 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
 3. Post-process and inspect per the **Post-Process & Artifact Check** section below.
 4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
 5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
-6. Show the result (transparent PNG **and** the dark-background check) to the user for approval before generating variants.
+6. Show the result (transparent PNG **and** both background checks) to the user for approval before generating variants.
 
 ### Step 3 — Generate Expression Variants
 
@@ -121,14 +121,14 @@ Include every line below verbatim in every generation prompt — base (Step 2) a
 Run this sequence after every generation (base and variants):
 
 1. **Background removal**: `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model.
-2. **Dark-background check**: edge artifacts (light rim strokes, residual halo) are invisible against white or checkered previews and only show against dark tones — inspecting only the transparent PNG will miss them. Composite over a dark backdrop and look at the hair silhouette:
+2. **Dual-background check**: defect visibility is symmetric with backdrop tone — a **dark** backdrop exposes **bright** artifacts (light rim strokes, residual light halo, gray gap-residue), a **white** backdrop exposes **dark** artifacts (dark strokes or halo hugging the silhouette edge). Inspecting only the transparent PNG, or only one backdrop, misses half the defects (verified 2026-07-03). Composite over both and look at the hair silhouette:
 
    ```bash
-   python3 -c "from PIL import Image; fg=Image.open('<output>.png').convert('RGBA'); bg=Image.new('RGBA', fg.size, (30,30,38,255)); bg.alpha_composite(fg); bg.convert('RGB').save('<output>_darkcheck.png')"
+   python3 -c "from PIL import Image; fg=Image.open('<output>.png').convert('RGBA'); d=Image.new('RGBA', fg.size, (30,30,38,255)); d.alpha_composite(fg); d.convert('RGB').save('<output>_darkcheck.png'); w=Image.new('RGBA', fg.size, (255,255,255,255)); w.alpha_composite(fg); w.convert('RGB').save('<output>_whitecheck.png')"
    ```
 
-   Show this preview alongside the transparent PNG when asking for approval. The `_darkcheck` file is scratch — delete it after review, never commit it.
-3. **Retry discipline**: if the dark check shows severe edge highlights, regenerate once with the exact same prompt before editing any wording. The validated prompt has low median severity but non-zero variance — a same-prompt redraw is cheap and safe, while "improving" the wording has twice been shown to backfire (see Known Limitation).
+   Show both previews alongside the transparent PNG when asking for approval. The `_darkcheck` / `_whitecheck` files are scratch — delete them after review, never commit them.
+3. **Retry discipline**: if either background check shows severe edge artifacts, regenerate once with the exact same prompt before editing any wording. The validated prompt has low median severity but non-zero variance — a same-prompt redraw is cheap and safe, while "improving" the wording has twice been shown to backfire (see Known Limitation).
 
 ## Expression Descriptions
 
@@ -172,7 +172,7 @@ assets/tachie/
 
 - All images for one character share the same framing and approximate proportions
 - Transparent background (no solid color background baked in)
-- Dark-background artifact check performed on every accepted image (edge artifacts are invisible against light or checkered previews)
+- Dual-background artifact check (dark + white) performed on every accepted image (bright artifacts only show against dark, dark artifacts only against white)
 - Prompt Anchor text appears verbatim in every prompt
 - Design doc exists before any generation
 - Prompt file saved alongside every generated image
