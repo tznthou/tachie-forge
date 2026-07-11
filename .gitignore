@@ -6,6 +6,9 @@ test-output/
 .venv/
 .claude/
 
+# codex image_gen sandbox scratch (reference-image chroma intermediates)
+/tmp/
+
 # autoresearch-loop scratch (experiment state, not project output)
 .autoresearch-*.md
 /backup/
