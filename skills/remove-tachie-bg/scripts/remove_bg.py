@@ -6,6 +6,11 @@ MVP de-background pipeline for the `remove-tachie-bg` skill:
   solid-green dig-out + speck cleanup) -> transparent PNG + dark/white
   check previews.
 
+`--bg-type native` is the no-rembg path for images the generator already
+delivered with a real alpha channel: verify the alpha is real -> snap
+near-opaque alpha to 255 -> drop near-transparent alpha -> bleed edge colour
+into fully transparent pixels -> same previews.
+
 See skills/remove-tachie-bg/SKILL.md for when/how to use.
 Deliberately NOT included (v2): background auto-detection, alpha-matting
 refinement, batch mode, complex-background handling.
@@ -19,46 +24,74 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-# 函式庫 API 而非 rembg CLI: CLI 進入點無條件 import server/GUI 依賴(在 [cli] extra,
-# 拖 gradio/fastapi 全套), 函式庫核心只需 [cpu]; CLI 的 i 命令內部即是 remove(bytes, session)
-try:
-    from rembg import new_session, remove as rembg_remove
-except ImportError as e:
-    sys.exit(f"[error] rembg import failed ({e}). Is rembg[cpu] installed? See requirements.txt")
+# native 路徑門檻 (2026-11-18 hongliu 13 張實測: 全透明 48.5–49.4%, 本體 alpha 落在 250–254)
+NATIVE_MIN_TRANSPARENT = 0.10  # 全透明像素低於此比例 → 不是真透明(棋盤格假透明或畫了背景)
+NATIVE_OPAQUE_FROM = 250       # 本體 alpha 250–254 會微透出底色 → 拉到 255
+NATIVE_DROP_BELOW = 30         # 與 rembg 路徑的 α≤30→0 一致; 也清掉 image_gen 留在 α≈2–3 的綠底殘色
+EXIT_NOT_NATIVE = 3            # 呼叫端據此退回綠幕路徑
 
 
-def main():
-    ap = argparse.ArgumentParser(description="De-background an anime tachie image.")
-    ap.add_argument("input", help="path to the source image")
-    ap.add_argument("-o", "--output", required=True, help="path for the transparent RGBA PNG")
-    ap.add_argument(
-        "--bg-type",
-        choices=["green", "solid", "transparent", "other"],
-        default="other",
-        help="original background type; 'green' triggers green-spill decontamination + solid-green dig-out",
-    )
-    ap.add_argument(
-        "--no-green-dig",
-        action="store_true",
-        help="skip solid-green residue dig-out (escape hatch when the character's own palette contains saturated green, e.g. green eyes/hair/outfit)",
-    )
-    ap.add_argument("--max-edge", type=int, default=1536, help="downscale long edge to this (default 1536)")
-    ap.add_argument("--preview-dir", default=None, help="dir for _darkcheck/_whitecheck previews (default: output dir)")
-    args = ap.parse_args()
-
-    if not os.path.isfile(args.input):
-        sys.exit(f"[error] input not found: {args.input}")
-
-    # 1. load + downscale (立繪用不到 8K,超大圖 rembg 慢且不會更準)
+def load_scaled(path, mode, max_edge):
+    """Open + downscale to max_edge (立繪用不到 8K, 超大圖 rembg 慢且不會更準)."""
     try:
-        img = Image.open(args.input).convert("RGB")
+        img = Image.open(path).convert(mode)
     except OSError as e:  # UnidentifiedImageError(壞檔/非圖片)也是 OSError
         sys.exit(f"[error] cannot read image ({e}). PNG/JPEG/WebP supported.")
     w, h = img.size
-    scale = min(1.0, args.max_edge / max(w, h))
+    scale = min(1.0, max_edge / max(w, h))
     if scale < 1.0:
         img = img.resize((int(w * scale), int(h * scale)))
         print(f"[downscale] {w}x{h} -> {img.size[0]}x{img.size[1]}")
+    return img
+
+
+def native_pipeline(args):
+    """Finalize a generator-native RGBA image without re-segmenting it."""
+    src = Image.open(args.input)
+    if "A" not in src.getbands():
+        print(f"[not-native] no alpha channel (mode={src.mode}) — fall back to the green-screen route")
+        sys.exit(EXIT_NOT_NATIVE)
+    arr = np.array(load_scaled(args.input, "RGBA", args.max_edge))
+    a = arr[:, :, 3].astype(np.int32)
+
+    transparent_share = float((a == 0).mean())
+    if transparent_share < NATIVE_MIN_TRANSPARENT:
+        print(f"[not-native] only {transparent_share:.1%} fully transparent px "
+              f"(< {NATIVE_MIN_TRANSPARENT:.0%}) — likely fake/checkered transparency; "
+              "fall back to the green-screen route")
+        sys.exit(EXIT_NOT_NATIVE)
+
+    snapped = int(((a >= NATIVE_OPAQUE_FROM) & (a < 255)).sum())
+    dropped = int(((a > 0) & (a <= NATIVE_DROP_BELOW)).sum())
+    a[a >= NATIVE_OPAQUE_FROM] = 255
+    a[a <= NATIVE_DROP_BELOW] = 0
+    arr[:, :, 3] = a.astype(np.uint8)
+
+    # 全透明像素的 RGB 改成最近可見像素的顏色 (edge bleed): 引擎縮放/雙線性濾波會混到
+    # 透明像素的 RGB, 留著綠底殘色會滲綠邊, 塗黑則滲黑邊; 等同 Godot Fix Alpha Border 先做掉
+    hidden = a == 0
+    if hidden.any() and (~hidden).any():
+        _, (iy, ix) = ndimage.distance_transform_edt(hidden, return_indices=True)
+        for c in range(3):
+            arr[:, :, c] = arr[iy, ix, c]
+
+    stats = [f"[native] real alpha: {transparent_share:.1%} fully transparent px",
+             f"[native] snapped {snapped} px alpha {NATIVE_OPAQUE_FROM}-254 -> 255, "
+             f"dropped {dropped} px alpha 1-{NATIVE_DROP_BELOW} -> 0, edge colour bled into transparent px"]
+    return arr, stats
+
+
+def rembg_pipeline(args):
+    """Segment with rembg, clamp alpha, and (green only) de-green."""
+    # 函式庫 API 而非 rembg CLI: CLI 進入點無條件 import server/GUI 依賴(在 [cli] extra,
+    # 拖 gradio/fastapi 全套), 函式庫核心只需 [cpu]; CLI 的 i 命令內部即是 remove(bytes, session)
+    try:
+        from rembg import new_session, remove as rembg_remove
+    except ImportError as e:
+        sys.exit(f"[error] rembg import failed ({e}). Is rembg[cpu] installed? See requirements.txt")
+
+    # 1. load + downscale
+    img = load_scaled(args.input, "RGB", args.max_edge)
 
     # 2. rembg (anime-tuned segmentation; 餵 PNG bytes — 輸出驗證基準建立在此路徑, 勿改餵 PIL 物件)
     buf = io.BytesIO()
@@ -108,6 +141,43 @@ def main():
             speck_count = int(small.sum())
             arr[:, :, 3] = np.where(small, 0, arr[:, :, 3]).astype(np.uint8)
 
+    stats = []
+    if args.bg_type == "green":
+        stats.append(f"[de-green] decontaminated {greenish_count} edge pixels")
+        if not args.no_green_dig:
+            stats.append(f"[green-dig] removed {dug_count} solid green px"
+                         + (f" + {speck_count} px in isolated specks" if speck_count else ""))
+    return arr, stats
+
+
+def main():
+    ap = argparse.ArgumentParser(description="De-background an anime tachie image.")
+    ap.add_argument("input", help="path to the source image")
+    ap.add_argument("-o", "--output", required=True, help="path for the transparent RGBA PNG")
+    ap.add_argument(
+        "--bg-type",
+        choices=["green", "solid", "transparent", "other", "native"],
+        default="other",
+        help="original background type; 'green' triggers green-spill decontamination + solid-green dig-out; "
+             f"'native' = generator already delivered real alpha (no rembg; exits {EXIT_NOT_NATIVE} if the alpha is not real)",
+    )
+    ap.add_argument(
+        "--no-green-dig",
+        action="store_true",
+        help="skip solid-green residue dig-out (escape hatch when the character's own palette contains saturated green, e.g. green eyes/hair/outfit)",
+    )
+    ap.add_argument("--max-edge", type=int, default=1536, help="downscale long edge to this (default 1536)")
+    ap.add_argument("--preview-dir", default=None, help="dir for _darkcheck/_whitecheck previews (default: output dir)")
+    args = ap.parse_args()
+
+    if not os.path.isfile(args.input):
+        sys.exit(f"[error] input not found: {args.input}")
+
+    if args.bg_type == "native":
+        arr, stats = native_pipeline(args)
+    else:
+        arr, stats = rembg_pipeline(args)
+
     out = Image.fromarray(arr, "RGBA")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     out.save(args.output)
@@ -124,11 +194,8 @@ def main():
         canvas.convert("RGB").save(p)
         previews.append(p)
 
-    if args.bg_type == "green":
-        print(f"[de-green] decontaminated {greenish_count} edge pixels")
-        if not args.no_green_dig:
-            print(f"[green-dig] removed {dug_count} solid green px"
-                  + (f" + {speck_count} px in isolated specks" if speck_count else ""))
+    for line in stats:
+        print(line)
     print(f"[done] {args.output}")
     print(f"[check] eyeball BOTH previews:\n        {previews[0]}\n        {previews[1]}")
 

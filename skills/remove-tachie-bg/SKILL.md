@@ -26,7 +26,7 @@ This is the "bring-your-own-image" de-background path — the counterpart to `ge
 Ask the user two things (do **not** auto-detect — one question is more reliable):
 
 1. **Is this an anime-style illustration?** (if not, warn about degraded quality)
-2. **What is the original background?** — `green` (chroma green) / `solid` (other flat color) / `transparent` (fake checkered) / `other`
+2. **What is the original background?** — `green` (chroma green) / `solid` (other flat color) / `transparent` (fake checkered) / `native` (real alpha channel straight from the generator) / `other`
 
 Background type decides the decontamination strategy in Step 1.
 
@@ -44,6 +44,8 @@ The green path is two-stage because green residue comes in two physically differ
 
 1. **Feathered-edge spill** (30<α<255 rim band): green light reflected onto hair edges → green-channel suppression.
 2. **Solid green gap-blocks** (α=255): rembg misjudges green background trapped in hair slits as *foreground* — edge decontamination can't touch these because they aren't edges. Fixed by color-gate dig-out (`(g>r+40)&(g>b+40)&(g>120)` → alpha 0) followed by ≤64px isolated-speck cleanup for the fragments the dig-out leaves behind.
+
+**Native path** (`--bg-type native`): for images that already carry a real alpha channel (e.g. `generate-tachie` Step 3 variants). Skips rembg entirely — re-segmenting real alpha only loses edge detail — and instead: verifies the alpha is real (exits **3** with `[not-native]` if there is no alpha channel or under 10% fully transparent pixels, i.e. fake/checkered transparency) → snaps alpha ≥250 to 255 (`image_gen` returns the body at 250–254, slightly see-through) → drops alpha ≤30 to 0 (clears the green RGB `image_gen` leaves at alpha ≈ 2–3) → bleeds the nearest visible colour into fully transparent pixels so engine filtering can't pull in green or black at the edge. Verified 2026-11-18 on hongliu: visible greenish px 0, edges unchanged at 3× zoom.
 
 **Escape hatch**: the dig-out assumes the character's own palette contains no saturated green. For a green-eyed / green-haired / green-outfit character it would eat the character — pass `--no-green-dig` to skip stage 2 (stage 1 spill suppression still runs).
 
