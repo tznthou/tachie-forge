@@ -81,9 +81,22 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
    - "Single character, clean lines, no text, no UI"
    - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim (apply the non-dark-hair adaptation if the character's hair is not dark)
    - Art style cues matching the chosen `art_style`
-   - Request transparent background in the prompt. On this text-to-image path (no `-i` reference) gpt-image-2 usually delivers **true RGBA transparency** directly (hongliu neutral: 51.9% fully transparent pixels, zero residue; 2026-07-11), but may still fall back to a checkered-pattern fake transparency — run the post-process either way and let the dual-background check judge
+   - Request transparent background in the prompt. On this text-to-image path (no `-i` reference) gpt-image-2 usually delivers **true RGBA transparency** directly (hongliu neutral: 51.9% fully transparent pixels, zero residue; 2026-07-11), but may still fall back to a checkered-pattern fake transparency — the post-process tells the two apart and picks the route
 2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh --size <size> -o <output-path> "<prompt>"` — this bridges to Codex CLI's `image_gen`.
-3. Post-process and inspect per the **Post-Process & Artifact Check** section below.
+3. Post-process — native transparency first, rembg only as the fallback:
+
+   ```bash
+   python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type native
+   ```
+
+   - **Exit 0**: the raw already has real alpha. The script only finalizes it (snaps alpha ≥250 to 255, drops alpha ≤30, bleeds edge colour into transparent pixels) — do **not** run rembg on top.
+   - **Exit 3** (`[not-native]`: no alpha channel, or under 10% fully transparent pixels = checkered fake transparency or a painted backdrop): fall back to the rembg sequence in **Post-Process & Artifact Check** step 1.
+
+   Why native first: re-segmenting a raw that already has real alpha loses artwork and colour. Measured on hongliu neutral (2026-11-18): rembg cut away 4,170 px of skirt that the raw contains, and it darkens colours — rembg multiplies RGB by its mask, the alpha clamp then pushes alpha back to 255 without restoring RGB (all 483,424 body px matched `raw RGB × mask/255` exactly). On the same image the native route left every visible pixel's RGB identical to the raw.
+
+   Validated scope: the native gate passed on four base raws (hongliu, meiyi, meiyi-real, shion) and correctly rejected one checkered raw (demo); only hongliu's result was eye-checked on both backgrounds, and light hair is untested. The script downscales a raw whose long edge exceeds 1536 (`--max-edge`), so the base's canvas is the finished PNG's size, not necessarily the raw's.
+
+   Then inspect per the **Post-Process & Artifact Check** section below.
 4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
 5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
 6. Show the result (transparent PNG **and** both background checks) to the user for approval before generating variants.
@@ -148,7 +161,8 @@ Include every line below verbatim in every generation prompt — base (Step 2) a
 Run this after every generation. Step 1 depends on the route; steps 2–3 apply to everything:
 
 1. **Background removal**:
-   - *Base / text-to-image output* (transparent or checkered): `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model.
+   - *Base / text-to-image output with real alpha* (Step 2, exit 0): already handled by `remove_bg.py --bg-type native` in that step — no rembg, alpha finalize only.
+   - *Base / text-to-image output without real alpha* (Step 2, exit 3 — checkered fake transparency or a painted backdrop): `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model. This is the fallback only: rembg can cut away parts of the character and darkens colours (see Step 2), so do not use it on a raw that passed the native gate.
    - *Native-transparent variant output* (Step 3): already handled by `remove_bg.py --bg-type native` in that step — no rembg, alpha finalize only. Do not run rembg on top of it: re-segmenting a real alpha channel can only lose edge detail.
    - *Green-screen variant output* (Step 3 fallback): already handled by `remove_bg.py --bg-type green` in that step — same rembg + clamp plus two-stage de-greening. Do not run the manual sequence on top of it.
 2. **Dual-background check**: defect visibility is symmetric with backdrop tone — a **dark** backdrop exposes **bright** artifacts (light rim strokes, residual light halo, gray gap-residue), a **white** backdrop exposes **dark** artifacts (dark strokes or halo hugging the silhouette edge). Inspecting only the transparent PNG, or only one backdrop, misses half the defects (verified 2026-07-03). Composite over both and look at the hair silhouette:

@@ -32,7 +32,8 @@ from scipy import ndimage
 NATIVE_MIN_TRANSPARENT = 0.10  # 全透明像素低於此比例 → 不是真透明(棋盤格假透明或畫了背景)
 NATIVE_OPAQUE_FROM = 250       # 本體 alpha 250–254 會微透出底色 → 拉到 255
 NATIVE_DROP_BELOW = 30         # 與 rembg 路徑的 α≤30→0 一致; 也清掉 image_gen 留在 α≈2–3 的綠底殘色
-EXIT_NOT_NATIVE = 3            # 呼叫端據此退回綠幕路徑
+EXIT_NOT_NATIVE = 3            # 呼叫端據此走退路: 基準圖退回 rembg, 表情差分改綠幕重生
+NOT_NATIVE_HINT = "take the fallback route (base image: rembg; expression variant: green-screen regeneration)"
 ASPECT_TOLERANCE = 0.01        # --match-size 容許的長寬比誤差
 
 
@@ -71,7 +72,7 @@ def native_pipeline(args):
     """Finalize a generator-native RGBA image without re-segmenting it."""
     src = Image.open(args.input)
     if "A" not in src.getbands():
-        print(f"[not-native] no alpha channel (mode={src.mode}) — fall back to the green-screen route")
+        print(f"[not-native] no alpha channel (mode={src.mode}) — {NOT_NATIVE_HINT}")
         sys.exit(EXIT_NOT_NATIVE)
     arr = np.array(load_scaled(args.input, "RGBA", args.max_edge, args.match_px))
     a = arr[:, :, 3].astype(np.int32)
@@ -79,8 +80,7 @@ def native_pipeline(args):
     transparent_share = float((a == 0).mean())
     if transparent_share < NATIVE_MIN_TRANSPARENT:
         print(f"[not-native] only {transparent_share:.1%} fully transparent px "
-              f"(< {NATIVE_MIN_TRANSPARENT:.0%}) — likely fake/checkered transparency; "
-              "fall back to the green-screen route")
+              f"(< {NATIVE_MIN_TRANSPARENT:.0%}) — likely fake/checkered transparency; {NOT_NATIVE_HINT}")
         sys.exit(EXIT_NOT_NATIVE)
 
     snapped = int(((a >= NATIVE_OPAQUE_FROM) & (a < 255)).sum())

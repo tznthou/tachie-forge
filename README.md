@@ -22,7 +22,7 @@ Tachie Forge 是三個 Claude Code / Codex skill：`generate-scene-bg` 生成場
 | 功能 | 說明 |
 |------|------|
 | **generate-scene-bg** | 生成 ADV/VN 場景背景，支援時段/天氣變體（白天、黃昏、雨天等），拿既有背景當視覺參照維持構圖一致 |
-| **generate-tachie** | 生成角色立繪，六種表情差分（neutral / smile / angry / sad / surprised / confused），Design Doc + Prompt Anchor 機制維持角色一致性；表情差分先要原生透明輸出，拿不到真透明才退回綠幕 |
+| **generate-tachie** | 生成角色立繪，六種表情差分（neutral / smile / angry / sad / surprised / confused），Design Doc + Prompt Anchor 機制維持角色一致性；基準圖和表情差分都先要原生透明輸出，拿不到真透明時基準圖退回 rembg 去背、表情差分退回綠幕 |
 | **remove-tachie-bg** | 現成立繪去背：本地 Web UI 拖圖進來 → 透明 PNG → 深底／白底雙檢查 → 下載；綠幕圖會多做去綠處理，已經是原生透明的圖只驗證 alpha 並收邊、不重新去背，也有 CLI 版 |
 | **對話 UI** | 規劃中，尚未開始 |
 
@@ -37,10 +37,10 @@ flowchart LR
     PromptBG --> Codex["Codex CLI<br/>image_gen"]
     PromptChar --> Codex
     Codex --> RawBG["assets/bg/*.png"]
-    Codex -->|基準圖| Rembg["rembg isnet-anime<br/>+ alpha clamp"]
-    Codex -->|表情差分| Native{"是真透明？"}
+    Codex -->|基準圖、表情差分| Native{"是真透明？"}
     Native -->|是| Finalize["alpha 收邊<br/>不重新去背"]
-    Native -->|否| Green["改綠幕重生<br/>rembg + 兩段式去綠"]
+    Native -->|否：基準圖| Rembg["rembg isnet-anime<br/>+ alpha clamp"]
+    Native -->|否：表情差分| Green["改綠幕重生<br/>rembg + 兩段式去綠"]
     WebUI --> Rembg
     WebUI -->|選原生透明| Finalize
     Rembg --> OutChar["透明 PNG<br/>assets/tachie/ 或瀏覽器下載"]
@@ -48,15 +48,15 @@ flowchart LR
     Green --> OutChar
 ```
 
-表情差分會把基準圖當參照一起送進 `image_gen`，並直接要求透明背景。拿回來的圖先驗 alpha 是不是真的（沒有 alpha 通道，或全透明像素不到 10% 就算假透明）：是真的就只做收邊，不再跑 rembg——對真 alpha 重新分割只會丟邊緣細節；不是就改用綠幕 prompt 重生一張，走 rembg 加去綠。兩條路都會先把差分縮放到基準圖的尺寸，因為 `image_gen` 不保證照要求的尺寸出圖。
+基準圖和表情差分都直接向 `image_gen` 要求透明背景（差分會把基準圖當參照一起送進去）。拿回來的圖先驗 alpha 是不是真的（沒有 alpha 通道，或全透明像素不到 10% 就算假透明）：是真的就只做收邊，不再跑 rembg——對真 alpha 重新分割可能切掉畫好的部分，也會把顏色壓暗。不是真的話，基準圖退回 rembg 去背，表情差分改用綠幕 prompt 重生一張、走 rembg 加去綠。差分不論走哪條路，都會先縮放到基準圖的尺寸，因為 `image_gen` 不保證照要求的尺寸出圖。
 
 ## 技術棧
 
 | 技術 | 用途 | 備註 |
 |------|------|------|
 | Codex CLI | 呼叫內建的 `image_gen` 生成圖片 | 需要 `OPENAI_API_KEY`；Codex 不公開 `image_gen` 背後的模型版本 |
-| `image_gen` 透明輸出 | 立繪的透明背景來源 | 要求透明背景時通常拿得到真 alpha，偶爾仍退回棋盤格假透明，所以每張都驗證，表情差分失敗就走綠幕退路 |
-| rembg (isnet-anime) | 立繪去背（基準圖、綠幕退路、現成立繪） | Python 套件，隨 `requirements.txt` 安裝 |
+| `image_gen` 透明輸出 | 立繪的透明背景來源 | 要求透明背景時通常拿得到真 alpha，偶爾仍退回棋盤格假透明，所以每張都驗證；拿不到時基準圖退回 rembg，表情差分走綠幕退路 |
+| rembg (isnet-anime) | 立繪去背（基準圖退路、綠幕退路、現成立繪） | Python 套件，隨 `requirements.txt` 安裝 |
 | Flask | remove-tachie-bg 的本地 Web UI | 雙擊 `start.command` 啟動，圖片不離開本機 |
 | Python | 跑去背 + alpha clamp 後製 | 3.13，虛擬環境用 uv 管理 |
 | Bash | `call-codex-imagegen.sh` 橋接腳本 | 處理 timeout / log / 錯誤分類 |
@@ -115,7 +115,7 @@ LICENSE
 | **一致性是 best-effort** | Prompt Anchor + 視覺參照，不是 LoRA 級的像素一致，多次生成外觀可能微幅飄移 |
 | **MVP 僅支援單一姿勢** | 一個角色目前只有一套姿勢＋六種表情差分，不同姿勢（坐姿、背面等）是刻意延後的 v2 範圍，不是遺漏 |
 | **去背無法保證零瑕疵** | 主變數是輪廓開放度：封閉輪廓（雙馬尾內圈、圈狀配件）與髮束細縫圈住的背景，去背救不了，要在角色設計階段避開；髮絲邊緣的高光筆觸是模型畫進線稿的內容，後製也碰不到。檢查一律深底＋白底兩張都看——亮色瑕疵只在深底現形，綠邊／暗邊只在白底現形，單看一種會漏判一半 |
-| **原生透明只在一個角色上驗證過** | 表情差分的原生透明路線目前 13/13 成功，但樣本全是同一個深色髮角色，淺色頭髮沒測過。Codex 不公開 `image_gen` 的模型版本，成功率可能再變（2026-07 時同一個請求只有約 1/4 拿到真透明），所以綠幕退路一直留著 |
+| **原生透明只在一個角色上驗證過** | 表情差分的原生透明路線目前 13/13 成功，基準圖的原生透明成品也只在同一個角色上檢查過；樣本全是深色髮，淺色頭髮沒測過。Codex 不公開 `image_gen` 的模型版本，成功率可能再變（2026-07 時同一個請求只有約 1/4 拿到真透明），所以 rembg 和綠幕兩條退路都留著 |
 | **沒有 Godot 專屬整合** | 輸出是通用 PNG + prompt.txt，沒有 export 成 Godot resource 或場景節點，素材要手動丟進遊戲專案 |
 | **對話 UI 尚未開始** | 三素材裡只完成 BG + 立繪，對話框/文字 UI 還在規劃階段 |
 
