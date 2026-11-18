@@ -20,3 +20,12 @@ final-comparison.md
 assets/tachie/hongliu/debg-comparison/h.png
 assets/tachie/hongliu/debg-comparison/h2.png
 assets/tachie/hongliu/debg-comparison/h3.png
+
+# local-only assets, not tracked (owner decision 2026-11-18)
+/assets/bg/tautin-studio-day.png
+/assets/bg/tautin-studio-day.prompt.txt
+/assets/bg/tautin-studio-night.png
+/assets/bg/tautin-studio-night.prompt.txt
+/assets/tachie/meiyi/
+/assets/tachie/meiyi-real/
+/assets/tachie/shion/
