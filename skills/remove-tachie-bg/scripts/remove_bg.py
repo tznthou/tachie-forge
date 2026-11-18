@@ -11,6 +11,10 @@ delivered with a real alpha channel: verify the alpha is real -> snap
 near-opaque alpha to 255 -> drop near-transparent alpha -> bleed edge colour
 into fully transparent pixels -> same previews.
 
+`--match-size <image>` replaces the downscale step on either path: the input
+is resized to that reference image's pixel size, so every expression of one
+character ends up on the same canvas as its base tachie.
+
 See skills/remove-tachie-bg/SKILL.md for when/how to use.
 Deliberately NOT included (v2): background auto-detection, alpha-matting
 refinement, batch mode, complex-background handling.
@@ -29,15 +33,33 @@ NATIVE_MIN_TRANSPARENT = 0.10  # 全透明像素低於此比例 → 不是真透
 NATIVE_OPAQUE_FROM = 250       # 本體 alpha 250–254 會微透出底色 → 拉到 255
 NATIVE_DROP_BELOW = 30         # 與 rembg 路徑的 α≤30→0 一致; 也清掉 image_gen 留在 α≈2–3 的綠底殘色
 EXIT_NOT_NATIVE = 3            # 呼叫端據此退回綠幕路徑
+ASPECT_TOLERANCE = 0.01        # --match-size 容許的長寬比誤差
 
 
-def load_scaled(path, mode, max_edge):
-    """Open + downscale to max_edge (立繪用不到 8K, 超大圖 rembg 慢且不會更準)."""
+def load_scaled(path, mode, max_edge, match_size=None):
+    """Open + resize: 給了 match_size 就縮放到那個尺寸, 否則只把長邊壓到 max_edge
+    (立繪用不到 8K, 超大圖 rembg 慢且不會更準).
+
+    縮放一律在這裡做, 不在收尾之後: Pillow 縮 RGBA 走 premultiplied alpha, 縮完全透明像素的
+    RGB 會歸零, 之後才做的 edge bleed 會被洗掉.
+    """
     try:
         img = Image.open(path).convert(mode)
     except OSError as e:  # UnidentifiedImageError(壞檔/非圖片)也是 OSError
         sys.exit(f"[error] cannot read image ({e}). PNG/JPEG/WebP supported.")
     w, h = img.size
+    if match_size:
+        tw, th = match_size
+        # 長寬比差超過 1% 就不縮: 硬拉會把角色壓扁或拉長, 這種圖該重生而不是修
+        if abs(w * th - h * tw) > ASPECT_TOLERANCE * h * tw:
+            sys.exit(f"[error] aspect ratio mismatch: input is {w}x{h}, --match-size reference is {tw}x{th}. "
+                     "Resizing would distort the character — regenerate the image instead.")
+        if (w, h) == (tw, th):
+            print(f"[match-size] already {tw}x{th}")
+        else:
+            img = img.resize((tw, th))
+            print(f"[match-size] {w}x{h} -> {tw}x{th}")
+        return img
     scale = min(1.0, max_edge / max(w, h))
     if scale < 1.0:
         img = img.resize((int(w * scale), int(h * scale)))
@@ -51,7 +73,7 @@ def native_pipeline(args):
     if "A" not in src.getbands():
         print(f"[not-native] no alpha channel (mode={src.mode}) — fall back to the green-screen route")
         sys.exit(EXIT_NOT_NATIVE)
-    arr = np.array(load_scaled(args.input, "RGBA", args.max_edge))
+    arr = np.array(load_scaled(args.input, "RGBA", args.max_edge, args.match_px))
     a = arr[:, :, 3].astype(np.int32)
 
     transparent_share = float((a == 0).mean())
@@ -91,7 +113,7 @@ def rembg_pipeline(args):
         sys.exit(f"[error] rembg import failed ({e}). Is rembg[cpu] installed? See requirements.txt")
 
     # 1. load + downscale
-    img = load_scaled(args.input, "RGB", args.max_edge)
+    img = load_scaled(args.input, "RGB", args.max_edge, args.match_px)
 
     # 2. rembg (anime-tuned segmentation; 餵 PNG bytes — 輸出驗證基準建立在此路徑, 勿改餵 PIL 物件)
     buf = io.BytesIO()
@@ -167,11 +189,27 @@ def main():
         help="skip solid-green residue dig-out (escape hatch when the character's own palette contains saturated green, e.g. green eyes/hair/outfit)",
     )
     ap.add_argument("--max-edge", type=int, default=1536, help="downscale long edge to this (default 1536)")
+    ap.add_argument(
+        "--match-size",
+        metavar="IMAGE",
+        default=None,
+        help="resize the input to this reference image's pixel size before processing "
+             "(expression variant -> the character's base tachie); overrides --max-edge, "
+             "refuses if the aspect ratios differ by more than 1%%",
+    )
     ap.add_argument("--preview-dir", default=None, help="dir for _darkcheck/_whitecheck previews (default: output dir)")
     args = ap.parse_args()
 
     if not os.path.isfile(args.input):
         sys.exit(f"[error] input not found: {args.input}")
+
+    args.match_px = None
+    if args.match_size:
+        try:
+            with Image.open(args.match_size) as ref:
+                args.match_px = ref.size
+        except OSError as e:
+            sys.exit(f"[error] cannot read --match-size reference ({e})")
 
     if args.bg_type == "native":
         arr, stats = native_pipeline(args)

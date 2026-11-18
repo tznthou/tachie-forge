@@ -111,11 +111,13 @@ For each requested expression (or all 6 MVP expressions: smile, angry, sad, surp
 
      > "Fully transparent background: output a true RGBA PNG with a real alpha channel — no backdrop color, no checkerboard pattern, every gap between hair strands and the area around the silhouette fully transparent."
 
-3. Generate, then finalize via the `remove-tachie-bg` script (no rembg on this path — it verifies the alpha is real, snaps alpha ≥250 to 255, drops alpha ≤30, and bleeds edge colour into transparent pixels):
+3. Generate, then finalize via the `remove-tachie-bg` script (no rembg on this path — it resizes the variant to the base image's pixel size, verifies the alpha is real, snaps alpha ≥250 to 255, drops alpha ≤30, and bleeds edge colour into transparent pixels):
 
    ```bash
-   python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type native
+   python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type native --match-size <character_name>_neutral.png
    ```
+
+   Always pass `--match-size` with the character's base (neutral) image. `image_gen` treats the requested size as a hint, not a guarantee: hongliu's base is 1024×1024 while the five variants generated on 2026-11-18 came back 1254×1254, so an engine showing expressions at native pixel size would make the character jump ~22%. On hongliu the character fills the same share of the canvas at either size (silhouette bounds agree to within about 0.5% of the canvas across all 7 expressions), so resizing to the base lines them up. If the script exits with `[error] aspect ratio mismatch`, the model returned a different canvas shape — regenerate that expression, do not stretch it. Do not resize a finished PNG with another tool instead: resizing an RGBA image zeroes the RGB under fully transparent pixels, which undoes the edge-colour bleed.
 
    Then inspect per the **Post-Process & Artifact Check** dual-background step.
 4. **Fallback — exit code 3** (`[not-native]`: no alpha channel, or under 10% fully transparent pixels = fake/checkered transparency or a painted backdrop): redo this expression on the green-screen route —
@@ -123,7 +125,7 @@ For each requested expression (or all 6 MVP expressions: smile, angry, sad, surp
 
      > "Solid uniform pure green chroma-key background (#00FF00), a flat single-color green backdrop with no gradient, no texture, no pattern — the green fills every gap between hair strands and around the entire silhouette."
 
-   - De-background with two-stage de-greening: `python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type green` (add `--no-green-dig` if the character's own palette contains saturated green — see that skill's escape hatch). Validated 5/5 on hongliu (2026-07-11), but the result can keep a thin green fringe on hair edges that only the dark check reveals — prefer another native attempt first when time allows.
+   - De-background with two-stage de-greening: `python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type green --match-size <character_name>_neutral.png` (add `--no-green-dig` if the character's own palette contains saturated green — see that skill's escape hatch). Validated 5/5 on hongliu (2026-07-11), but the result can keep a thin green fringe on hair edges that only the dark check reveals — prefer another native attempt first when time allows.
 5. Save as `<character_name>_<expression>.png` with `.prompt.txt`.
 
 This is best-effort consistency — image generation cannot guarantee identical appearance across variants. The Prompt Anchor + visual reference handoff improves consistency but is not pixel-perfect.
@@ -199,6 +201,7 @@ assets/tachie/
 ## Validation
 
 - All images for one character share the same framing and approximate proportions
+- All images for one character have the same pixel dimensions (variants are resized to the base image via `--match-size`)
 - Transparent background (no solid color background baked in)
 - Dual-background artifact check (dark + white) performed on every accepted image (bright artifacts only show against dark, dark artifacts only against white)
 - Prompt Anchor text appears verbatim in every prompt
