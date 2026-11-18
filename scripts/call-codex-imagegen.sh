@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# call-codex-imagegen.sh — Image generation bridge via Codex CLI (gpt-image-2)
+# call-codex-imagegen.sh — Image generation bridge via Codex CLI's image_gen
 #
 # Calls Codex CLI's built-in image_gen tool to generate images, then extracts
-# the file path for downstream pipelines (sprite processing, map compositing,
-# or any workflow that needs generated images).
+# the file path for downstream pipelines (background removal, compositing,
+# or any workflow that needs generated images). Codex does not expose which
+# image model image_gen runs.
 #
 # Designed for use with Claude Code (via prism/skill), other AI agents, CI, or
 # standalone. Requires: Codex CLI (npm i -g @openai/codex) + OPENAI_API_KEY.
 #
 # Usage:
-#   call-codex-imagegen.sh "pixel art warrior on solid #FF00FF magenta, 2x2 grid"
-#   call-codex-imagegen.sh -o ./assets/warrior.png "warrior sprite sheet"
-#   call-codex-imagegen.sh -i ref.png "match this style, create idle animation"
-#   call-codex-imagegen.sh --size 1024x1024 "forest tilemap"
+#   call-codex-imagegen.sh "empty classroom at dusk, anime background, no characters"
+#   call-codex-imagegen.sh -o ./assets/bg/classroom-dusk.png "empty classroom at dusk"
+#   call-codex-imagegen.sh -i akira_neutral.png "same character, change only the expression to a smile"
+#   call-codex-imagegen.sh --size 1024x1024 "waist-up character portrait, transparent background"
 #   call-codex-imagegen.sh --dry-run "test prompt"
 #
 # Exit codes:
