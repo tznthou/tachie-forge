@@ -103,9 +103,9 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
 
 ### Step 3 — Generate Expression Variants (native transparency, green-screen fallback)
 
-**Why native transparency first**: variant generation passes the base image as a visual reference (`-i`). Asking `image_gen` for a transparent background on this path now delivers true RGBA reliably — **13/13** on hongliu (2026-11-18: smile ×3, angry/sad/surprised/confused/excited ×2), clean on both background checks, and with **no visible green residue** (the green-screen route left ~1900–2300 fully opaque green fringe px per image on the same character). History: in 2026-07 the same request yielded true RGBA only ~1/4 of the time, which is why this step used to be green-screen only; which `image_gen` model version Codex runs is not exposed, so the success rate can regress again — the `native` post-process verifies every image and the green-screen route stays as the fallback.
+**Why native transparency first**: variant generation passes the base image as a visual reference (`-i`). Asking `image_gen` for a transparent background on this path now delivers true RGBA reliably — **14/14** on hongliu (2026-11-18: smile ×3, angry/sad/surprised/confused ×2, excited ×3), clean on both background checks, and with **no visible green residue** (the green-screen route left ~1900–2300 fully opaque green fringe px per image on the same character). History: in 2026-07 the same request yielded true RGBA only ~1/4 of the time, which is why this step used to be green-screen only; which `image_gen` model version Codex runs is not exposed, so the success rate can regress again — the `native` post-process verifies every image and the green-screen route stays as the fallback.
 
-**Validated scope**: all 13 samples are one dark-haired character (hongliu: blue-black hair, one reference image, one outfit). Light hair (blonde/silver/pink/white) is **untested** on this path — its edges may halo differently. The first time a new character goes through this step, run the full dual-background check on **every** expression, not a sample. The exit-3 gate only catches missing/fake transparency; it does **not** catch white/gray edge halos, which only the dark/white previews reveal.
+**Validated scope**: all 14 samples are one dark-haired character (hongliu: blue-black hair, one outfit, always the neutral image as the reference — 13 against its earlier rembg-cut version, 1 against the natively finalized one). Light hair (blonde/silver/pink/white) is **untested** on this path — its edges may halo differently. The first time a new character goes through this step, run the full dual-background check on **every** expression, not a sample. The exit-3 gate only catches missing/fake transparency; it does **not** catch white/gray edge halos, which only the dark/white previews reveal.
 
 Two quirks of native output, both handled by `remove_bg.py --bg-type native`: the character body comes back at alpha 250–254 instead of 255 (slightly see-through), and near-transparent pixels (alpha ≈ 2–3) carry green RGB — `image_gen` still composites `-i` transparent references onto a chroma-green backing internally (evidence: `tmp/imagegen/hongliu_neutral_chroma.png`, gitignored).
 
@@ -186,6 +186,9 @@ Use these concrete descriptions in prompts (not just the emotion word):
 | `sad` | sad expression, downcast eyes, slightly lowered brows, melancholic look |
 | `surprised` | surprised expression, wide eyes, slightly open mouth, raised eyebrows |
 | `confused` | confused expression, one eyebrow raised, slight frown, puzzled look |
+| `excited` | excited expression, sparkling wide eyes, bright cheerful open-mouth smile, raised eyebrows, energetic glowing look |
+
+`excited` is not one of the six MVP expressions and is not part of the "all expressions" batch in Step 3 — generate it only when asked. The wording is the one used for hongliu (2026-11-18).
 
 ## Art Style Cues
 
