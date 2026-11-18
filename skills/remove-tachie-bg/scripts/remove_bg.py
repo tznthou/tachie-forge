@@ -2,8 +2,9 @@
 """Remove the background from an existing anime tachie image.
 
 MVP de-background pipeline for the `remove-tachie-bg` skill:
-  downscale -> rembg isnet-anime -> alpha clamp -> (green: de-green) ->
-  transparent PNG + dark/white check previews.
+  downscale -> rembg isnet-anime -> alpha clamp -> (green: de-green +
+  solid-green dig-out + speck cleanup) -> transparent PNG + dark/white
+  check previews.
 
 See skills/remove-tachie-bg/SKILL.md for when/how to use.
 Deliberately NOT included (v2): background auto-detection, alpha-matting
@@ -16,6 +17,7 @@ import sys
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 # 函式庫 API 而非 rembg CLI: CLI 進入點無條件 import server/GUI 依賴(在 [cli] extra,
 # 拖 gradio/fastapi 全套), 函式庫核心只需 [cpu]; CLI 的 i 命令內部即是 remove(bytes, session)
@@ -33,7 +35,12 @@ def main():
         "--bg-type",
         choices=["green", "solid", "transparent", "other"],
         default="other",
-        help="original background type; 'green' triggers green-spill decontamination",
+        help="original background type; 'green' triggers green-spill decontamination + solid-green dig-out",
+    )
+    ap.add_argument(
+        "--no-green-dig",
+        action="store_true",
+        help="skip solid-green residue dig-out (escape hatch when the character's own palette contains saturated green, e.g. green eyes/hair/outfit)",
     )
     ap.add_argument("--max-edge", type=int, default=1536, help="downscale long edge to this (default 1536)")
     ap.add_argument("--preview-dir", default=None, help="dir for _darkcheck/_whitecheck previews (default: output dir)")
@@ -78,6 +85,29 @@ def main():
         # 輕壓:偏綠像素的綠通道壓到 max(r,b),不做完整反解
         arr[:, :, 1] = np.where(greenish, np.maximum(r, b), g).astype(np.uint8)
 
+    # 4b. solid-green dig-out (green only): feather 帶去綠救不到 alpha=255 的縫隙綠塊
+    # (rembg 把封閉縫隙裡的綠背景誤判為前景), 色域挖除後清掉挖剩的孤立碎片.
+    # 角色本身含飽和綠(綠瞳/綠髮/綠衣)會被誤殺 → --no-green-dig 跳過
+    dug_count = 0
+    speck_count = 0
+    if args.bg_type == "green" and not args.no_green_dig:
+        r = arr[:, :, 0].astype(int)
+        g = arr[:, :, 1].astype(int)
+        b = arr[:, :, 2].astype(int)
+        a2 = arr[:, :, 3]
+        green_bg = (a2 > 0) & (g > r + 40) & (g > b + 40) & (g > 120)
+        dug_count = int(green_bg.sum())
+        arr[:, :, 3] = np.where(green_bg, 0, a2).astype(np.uint8)
+
+        mask = arr[:, :, 3] > 0
+        labels, n = ndimage.label(mask)
+        if n > 1:
+            sizes = ndimage.sum(mask, labels, range(1, n + 1))
+            keep = np.argmax(sizes) + 1
+            small = np.isin(labels, [i for i in range(1, n + 1) if i != keep and sizes[i - 1] <= 64])
+            speck_count = int(small.sum())
+            arr[:, :, 3] = np.where(small, 0, arr[:, :, 3]).astype(np.uint8)
+
     out = Image.fromarray(arr, "RGBA")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     out.save(args.output)
@@ -96,6 +126,9 @@ def main():
 
     if args.bg_type == "green":
         print(f"[de-green] decontaminated {greenish_count} edge pixels")
+        if not args.no_green_dig:
+            print(f"[green-dig] removed {dug_count} solid green px"
+                  + (f" + {speck_count} px in isolated specks" if speck_count else ""))
     print(f"[done] {args.output}")
     print(f"[check] eyeball BOTH previews:\n        {previews[0]}\n        {previews[1]}")
 

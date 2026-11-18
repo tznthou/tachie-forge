@@ -81,26 +81,39 @@ The **Prompt Anchor** is the key consistency mechanism — a fixed text block de
    - "Single character, clean lines, no text, no UI"
    - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim (apply the non-dark-hair adaptation if the character's hair is not dark)
    - Art style cues matching the chosen `art_style`
-   - Request transparent background in the prompt (gpt-image-2 renders a checkered-pattern fake transparency)
+   - Request transparent background in the prompt. On this text-to-image path (no `-i` reference) gpt-image-2 usually delivers **true RGBA transparency** directly (hongliu neutral: 51.9% fully transparent pixels, zero residue; 2026-07-11), but may still fall back to a checkered-pattern fake transparency — run the post-process either way and let the dual-background check judge
 2. Call `image_gen` with the prompt. Use `--size 1024x1024` for waist-up/bust-up, `--size 768x1344` for full-body. If the agent has no native `image_gen` tool (e.g. Claude Code), invoke it via Bash instead: `scripts/call-codex-imagegen.sh --size <size> -o <output-path> "<prompt>"` — this bridges to Codex CLI's `image_gen`.
 3. Post-process and inspect per the **Post-Process & Artifact Check** section below.
 4. Save to `assets/tachie/<character_name>/<character_name>_<expression>.png`
 5. Save prompt as `assets/tachie/<character_name>/<character_name>_<expression>.prompt.txt`
 6. Show the result (transparent PNG **and** both background checks) to the user for approval before generating variants.
 
-### Step 3 — Generate Expression Variants
+### Step 3 — Generate Expression Variants (green-screen route)
+
+**Why green-screen, not transparent**: variant generation passes the base image as a visual reference (`-i`). Codex `image_gen` internally composites `-i` transparent reference images onto a **chroma-green backing** before feeding the model (evidence: `tmp/imagegen/hongliu_neutral_chroma.png`, gitignored) — so the model sees a green-backed reference and paints a background anyway. Asking for a transparent background on the `-i` path yields true RGBA only ~1/4 of the time. Requesting a green screen instead *aligns with* that internal behavior, and the residue it leaves is recoverable by color (see `remove-tachie-bg`). Pipeline validated 5/5 on hongliu regeneration (2026-07-11: surprised/smile/angry/sad/confused).
 
 For each requested expression (or all 6 MVP expressions: smile, angry, sad, surprised, confused):
 
-1. Make the base (neutral) image visible in conversation context (via `view_image` or any available image reading method).
+1. Make the base (neutral) image visible in conversation context (via `view_image` or any available image reading method), and pass it as the `-i` reference to `call-codex-imagegen.sh`.
 2. Write the variant prompt including:
    - The full Prompt Anchor from the design doc (verbatim)
    - Same framing as the base
    - "Use the visible image above as the visual reference — preserve the exact character design, outfit, hair, pose, and proportions. Change only the facial expression."
    - The target expression: describe it concretely (e.g., "angry expression: furrowed brows, clenched jaw, sharp eyes" not just "angry")
    - "Single character, no text"
-   - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim (apply the non-dark-hair adaptation if the character's hair is not dark)
-3. Generate, then post-process and inspect per the **Post-Process & Artifact Check** section below.
+   - Every line from the **Anti-Artifact Prompt Lines** section below, verbatim, **with the green-screen adaptation applied** (and the non-dark-hair adaptation if the character's hair is not dark)
+   - Art style cues matching the chosen `art_style` (same as the base)
+   - End with the green-screen backdrop instruction, verbatim:
+
+     > "Solid uniform pure green chroma-key background (#00FF00), a flat single-color green backdrop with no gradient, no texture, no pattern — the green fills every gap between hair strands and around the entire silhouette."
+
+3. Generate, then de-background via the `remove-tachie-bg` script (two-stage de-greening included):
+
+   ```bash
+   python3 ../remove-tachie-bg/scripts/remove_bg.py <raw>.png -o <output>.png --bg-type green
+   ```
+
+   Then inspect per the **Post-Process & Artifact Check** dual-background step. If the character's own palette contains saturated green, add `--no-green-dig` (see that skill's escape hatch).
 4. Save as `<character_name>_<expression>.png` with `.prompt.txt`.
 
 This is best-effort consistency — image generation cannot guarantee identical appearance across variants. The Prompt Anchor + visual reference handoff improves consistency but is not pixel-perfect.
@@ -116,11 +129,15 @@ Include every line below verbatim in every generation prompt — base (Step 2) a
 
 **Non-dark hair adaptation**: the validated wording assumes dark hair — the loop's test character was black-haired. For a blonde/silver/pink/white-haired character, "a uniform flat dark tone" contradicts the design and may confuse the model or darken the hair edges. Replace it with "a uniform flat tone of the hair's base color" in the highlight-placement line. This substitution is semantically required but has not been loop-validated.
 
+**Green-screen adaptation** (Step 3 variants): the highlight-placement line ends with "...directly touches the transparent background boundary" — on the green-screen route there is no transparent background, so replace "transparent background boundary" with "background boundary". Minimal semantic substitution following the same precedent as the non-dark-hair adaptation; used verbatim in the 5/5 hongliu regeneration run (2026-07-11).
+
 ## Post-Process & Artifact Check
 
-Run this sequence after every generation (base and variants):
+Run this after every generation. Step 1 depends on the route; steps 2–3 apply to everything:
 
-1. **Background removal**: `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model.
+1. **Background removal**:
+   - *Base / text-to-image output* (transparent or checkered): `rembg i -m isnet-anime <raw>.png <output>.png`, then alpha-clamp (alpha >= 120 → 255, alpha <= 30 → 0) to get a clean RGBA PNG. Requires `rembg[cpu]` with the `isnet-anime` model.
+   - *Green-screen variant output* (Step 3): already handled by `remove_bg.py --bg-type green` in that step — same rembg + clamp plus two-stage de-greening. Do not run the manual sequence on top of it.
 2. **Dual-background check**: defect visibility is symmetric with backdrop tone — a **dark** backdrop exposes **bright** artifacts (light rim strokes, residual light halo, gray gap-residue), a **white** backdrop exposes **dark** artifacts (dark strokes or halo hugging the silhouette edge). Inspecting only the transparent PNG, or only one backdrop, misses half the defects (verified 2026-07-03). Composite over both and look at the hair silhouette:
 
    ```bash

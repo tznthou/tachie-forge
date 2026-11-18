@@ -4,3 +4,6 @@ numpy>=1.26,<2.5
 Pillow>=10.0
 rembg[cpu]>=2.0
 flask>=3.0
+# remove_bg.py 實心綠挖除的連通域清理用 scipy.ndimage;
+# rembg 依賴鏈本就拉入 scipy, 顯式宣告避免日後鏈變動時斷掉
+scipy>=1.11

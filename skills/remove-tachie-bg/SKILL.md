@@ -38,7 +38,14 @@ Run the script:
 python3 scripts/remove_bg.py <input> -o <output> --bg-type <green|solid|transparent|other>
 ```
 
-It does: downscale to long-edge 1536 → `rembg -m isnet-anime` → alpha clamp (α≥120→255, α≤30→0) → **if green: green-spill decontamination** → save transparent PNG + dark/white check previews.
+It does: downscale to long-edge 1536 → `rembg -m isnet-anime` → alpha clamp (α≥120→255, α≤30→0) → **if green: two-stage de-greening** → save transparent PNG + dark/white check previews.
+
+The green path is two-stage because green residue comes in two physically different forms (verified 2026-07-11, hongliu regeneration):
+
+1. **Feathered-edge spill** (30<α<255 rim band): green light reflected onto hair edges → green-channel suppression.
+2. **Solid green gap-blocks** (α=255): rembg misjudges green background trapped in hair slits as *foreground* — edge decontamination can't touch these because they aren't edges. Fixed by color-gate dig-out (`(g>r+40)&(g>b+40)&(g>120)` → alpha 0) followed by ≤64px isolated-speck cleanup for the fragments the dig-out leaves behind.
+
+**Escape hatch**: the dig-out assumes the character's own palette contains no saturated green. For a green-eyed / green-haired / green-outfit character it would eat the character — pass `--no-green-dig` to skip stage 2 (stage 1 spill suppression still runs).
 
 ### Step 2 — Dual-background eye check (the core)
 
@@ -75,7 +82,7 @@ These are design/drawing-stage problems, unsolvable at the de-background stage. 
   - *Green screen* → edge spill (measured 82.4% green edge), but the residue is green → **recoverable** by de-greening (82.4%→5% verified).
   - *Fake-transparent / checkered* → zero edge spill, but gap-trapped gray/checker residue has **no decontamination** — gray is too close to hair highlights and skin to target.
   - Practical call: gap-heavy designs (twin-tails, flyaway dynamic poses) → a green-screen source + de-green is the safer bet because its failure mode has an antidote; clean open silhouettes → fake-transparent stays zero-debt and skips a processing step.
-  - Unverified: whether green's high contrast also makes rembg cut micro-gaps *cleaner* at the source — needs a same-prompt dual-background A/B (2026-07-03).
+  - Verified by same-prompt same-tool A/B (2026-07-11, hongliu surprised): green does **not** make rembg cut micro-gaps cleaner at the source — solid green gap-blocks survive anyway (778–2216 px per image). Its entire advantage is that the residue is *color-identifiable and therefore recoverable*: the two-stage de-greening passed the dual check, while the fake-transparent takes failed twice on gray gap residue with no antidote. The fuse model is measured fact, not hypothesis.
 
 ## Web UI (optional)
 
