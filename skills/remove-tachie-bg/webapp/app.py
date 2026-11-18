@@ -18,6 +18,7 @@ from flask import Flask, jsonify, request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.normpath(os.path.join(HERE, "..", "scripts", "remove_bg.py"))
+EXIT_NOT_NATIVE = 3  # 對應 remove_bg.py 的同名常數
 
 # shell 繼承的 PYTHONPATH 會插在 sys.path 最前面蓋過 venv 套件; 清掉讓 subprocess
 # (remove_bg.py)確實用 venv 依賴(start.command 已清, 這裡保手動啟動的場景)
@@ -41,7 +42,7 @@ def remove():
     if "image" not in request.files or request.files["image"].filename == "":
         return jsonify({"error": "沒有收到圖片"}), 400
     bg_type = request.form.get("bg_type", "other")
-    if bg_type not in ("green", "solid", "transparent", "other"):
+    if bg_type not in ("green", "solid", "transparent", "other", "native"):
         bg_type = "other"
 
     with tempfile.TemporaryDirectory() as td:
@@ -55,6 +56,10 @@ def remove():
             )
         except subprocess.TimeoutExpired:
             return jsonify({"error": "去背逾時(圖太大?)"}), 500
+        # remove_bg.py 對「選了原生透明、但圖不是真透明」回 exit 3, 原因印在 stdout 不是 stderr
+        if bg_type == "native" and r.returncode == EXIT_NOT_NATIVE:
+            return jsonify({"error": "這張圖不是原生透明(沒有 alpha 通道, 或透明像素太少, "
+                                     "像是假透明棋盤格)。請改選其他背景類型再試一次"}), 400
         if r.returncode != 0 or not os.path.exists(out):
             return jsonify({"error": (r.stderr or "去背失敗").strip()}), 500
 

@@ -75,7 +75,7 @@
   /* ---- options ---- */
   fieldset { border: 0; margin-top: 20px; }
   legend { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
-  .opts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   .opt {
     display: flex; align-items: baseline; gap: 8px;
     background: var(--panel-2);
@@ -84,7 +84,6 @@
     padding: 10px 14px;
     cursor: pointer;
     transition: border-color .15s;
-    flex: 1 1 220px;
   }
   .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
   .opt input { accent-color: var(--accent); }
@@ -185,8 +184,10 @@
     <div class="opts">
       <label class="opt"><input type="radio" name="bg" value="transparent" checked>
         <span><span class="t">假透明棋盤格</span><br><span class="d">生圖工具輸出的灰白格子</span></span></label>
+      <label class="opt"><input type="radio" name="bg" value="native">
+        <span><span class="t">原生透明</span><br><span class="d">已是透明圖，不重新去背</span></span></label>
       <label class="opt"><input type="radio" name="bg" value="green">
-        <span><span class="t">綠幕</span><br><span class="d">會多做去綠處理（其他選項不會）</span></span></label>
+        <span><span class="t">綠幕</span><br><span class="d">只有這項會做去綠處理</span></span></label>
       <label class="opt"><input type="radio" name="bg" value="solid">
         <span><span class="t">其他單色</span><br><span class="d">白底、灰底等</span></span></label>
       <label class="opt"><input type="radio" name="bg" value="other">
