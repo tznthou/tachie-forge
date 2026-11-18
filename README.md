@@ -26,6 +26,28 @@ Tachie Forge 是三個 Claude Code / Codex skill：`generate-scene-bg` 生成場
 | **remove-tachie-bg** | 現成立繪去背：本地 Web UI 拖圖進來 → 透明 PNG → 深底／白底雙檢查 → 下載；綠幕圖會多做去綠處理，已經是原生透明的圖只驗證 alpha 並收邊、不重新去背，也有 CLI 版 |
 | **對話 UI** | 規劃中，尚未開始 |
 
+## 素材展示
+
+### 表情差分
+
+角色紅榴的七張立繪。`neutral` 是基準圖，其餘六張都拿它當視覺參照，只改表情。縮圖裁到頭部方便比對，點圖可以看完整的透明 PNG。
+
+| `neutral` | `smile` | `angry` | `sad` |
+|:---:|:---:|:---:|:---:|
+| [![紅榴 neutral](docs/img/hongliu_neutral_face.webp)](assets/tachie/hongliu/hongliu_neutral.png) | [![紅榴 smile](docs/img/hongliu_smile_face.webp)](assets/tachie/hongliu/hongliu_smile.png) | [![紅榴 angry](docs/img/hongliu_angry_face.webp)](assets/tachie/hongliu/hongliu_angry.png) | [![紅榴 sad](docs/img/hongliu_sad_face.webp)](assets/tachie/hongliu/hongliu_sad.png) |
+| **`surprised`** | **`confused`** | **`excited`** | |
+| [![紅榴 surprised](docs/img/hongliu_surprised_face.webp)](assets/tachie/hongliu/hongliu_surprised.png) | [![紅榴 confused](docs/img/hongliu_confused_face.webp)](assets/tachie/hongliu/hongliu_confused.png) | [![紅榴 excited](docs/img/hongliu_excited_face.webp)](assets/tachie/hongliu/hongliu_excited.png) | |
+
+`excited` 不在六種標準表情裡，是另外指定才生成的。
+
+### 背景變體
+
+同一間教室的兩種氣氛。白天版是拿恐怖版當視覺參照生成的：格局、桌椅位置和視角沿用，只換光線和氣氛。
+
+| 恐怖氛圍的黃昏（原圖） | 白天（變體） |
+|------|------|
+| [![教室，恐怖氛圍的黃昏](docs/img/classroom-horror.webp)](assets/bg/classroom-horror.png) | [![教室，白天](docs/img/classroom-day.webp)](assets/bg/classroom-day.png) |
+
 ## 系統架構
 
 ```mermaid
